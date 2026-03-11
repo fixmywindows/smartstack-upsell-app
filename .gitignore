@@ -1,0 +1,13 @@
+.env
+.env.local
+node_modules/
+dist/
+build/
+.DS_Store
+*.log
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+prisma/dev.db

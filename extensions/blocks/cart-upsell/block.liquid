@@ -1,0 +1,30 @@
+{%- if block.settings.enabled -%}
+  <div class="smartstack-cart-upsell" data-block-id="{{ block.id }}">
+    <div class="smartstack-cart-content">
+      <h3>{{ block.settings.heading }}</h3>
+      {% if block.settings.description %}
+        <p>{{ block.settings.description }}</p>
+      {% endif %}
+    </div>
+  </div>
+{%- endif -%}
+
+<style>
+  .smartstack-cart-upsell {
+    padding: 1.5rem;
+    background-color: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    margin: 1rem 0;
+  }
+
+  .smartstack-cart-upsell h3 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+
+  .smartstack-cart-upsell p {
+    color: #6b7280;
+  }
+</style>

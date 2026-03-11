@@ -1,0 +1,113 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // Using SQLite for the development environment so that the project can
+  // start without a running PostgreSQL server. The tests and production build
+  // should switch this back to "postgresql" and use a real DATABASE_URL.
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Shops - one per installed store
+model Shop {
+  id              String    @id @default(cuid())
+  shopifyDomain   String    @unique
+  accessToken     String    // Should be encrypted in production
+  scope           String
+  isActive        Boolean   @default(true)
+  plan            String    @default("free") // free, growth, scale
+  ordersThisMonth Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  campaigns       Campaign[]
+  analytics       Analytics[]
+  settings        Settings?
+}
+
+// Campaigns - upsell offers
+model Campaign {
+  id              String    @id @default(cuid())
+  shopId          String
+  shop            Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  
+  name            String
+  enabled         Boolean   @default(false)
+  triggerType     String    @default("post_purchase") // post_purchase, cart
+  selectionMethod String    @default("manual") // manual, tags
+  
+  // Manual: specific products (JSON array of product IDs)
+  // @db.Text removed for SQLite compatibility; default string length is used
+  products        String?
+  
+  // Tags: tag-based rules
+  tagLogic        String?   // any, all
+  // @db.Text removed; JSON array stored as string
+  requiredTags    String?
+  
+  // Offer config
+  offerType       String    @default("percentage") // percentage, fixed, bundle
+  offerValue      Float?
+  // @db.Text removed for compatibility
+  offerProducts   String?   // JSON array for bundle
+  
+  // Display settings
+  heading         String    @default("You might also like")
+  // description length is not critical; use default string
+  description     String?
+  buttonText      String    @default("Add to Order")
+  backgroundColor String    @default("#ffffff")
+  textColor       String    @default("#000000")
+  
+  // Schedule
+  startDate       DateTime?
+  endDate         DateTime?
+  
+  // Analytics
+  views           Int       @default(0)
+  conversions     Int       @default(0)
+  revenue         Float     @default(0)
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([shopId])
+}
+
+// Analytics - daily stats
+model Analytics {
+  id          String    @id @default(cuid())
+  shopId      String
+  shop        Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  
+  // @db.Date removed; DateTime will store full timestamp which works for both
+  date        DateTime  @default(now())
+  campaignId  String?
+  views       Int       @default(0)
+  conversions Int       @default(0)
+  revenue     Float     @default(0)
+  
+  createdAt   DateTime  @default(now())
+
+  @@unique([shopId, date, campaignId])
+  @@index([shopId, date])
+}
+
+// Settings - per-shop configuration
+model Settings {
+  id          String    @id @default(cuid())
+  shopId      String    @unique
+  shop        Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  
+  timezone    String    @default("UTC")
+  currency    String    @default("USD")
+  email       String?
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}

@@ -1,0 +1,10 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+export const meta = () => {
+    return [
+        { title: "Analytics - SmartStack" },
+        { name: "description", content: "View your campaign analytics" },
+    ];
+};
+export default function Analytics() {
+    return (_jsxs("div", { className: "min-h-screen bg-gray-50", children: [_jsx("nav", { className: "bg-white shadow", children: _jsx("div", { className: "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4", children: _jsx("h1", { className: "text-2xl font-bold text-gray-900", children: "Analytics" }) }) }), _jsxs("main", { className: "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12", children: [_jsxs("div", { className: "grid grid-cols-1 md:grid-cols-4 gap-4 mb-8", children: [_jsxs("div", { className: "bg-white rounded-lg shadow p-6", children: [_jsx("p", { className: "text-gray-600 text-sm", children: "Total Views" }), _jsx("p", { className: "text-3xl font-bold text-gray-900", children: "0" })] }), _jsxs("div", { className: "bg-white rounded-lg shadow p-6", children: [_jsx("p", { className: "text-gray-600 text-sm", children: "Conversions" }), _jsx("p", { className: "text-3xl font-bold text-gray-900", children: "0" })] }), _jsxs("div", { className: "bg-white rounded-lg shadow p-6", children: [_jsx("p", { className: "text-gray-600 text-sm", children: "Revenue" }), _jsx("p", { className: "text-3xl font-bold text-gray-900", children: "$0.00" })] }), _jsxs("div", { className: "bg-white rounded-lg shadow p-6", children: [_jsx("p", { className: "text-gray-600 text-sm", children: "Conversion Rate" }), _jsx("p", { className: "text-3xl font-bold text-gray-900", children: "0%" })] })] }), _jsxs("div", { className: "bg-white rounded-lg shadow p-6", children: [_jsx("h2", { className: "text-lg font-semibold text-gray-900 mb-4", children: "Analytics Chart" }), _jsx("div", { className: "h-64 bg-gray-100 rounded flex items-center justify-center", children: _jsx("p", { className: "text-gray-600", children: "Chart will appear here" }) })] })] })] }));
+}

@@ -1,0 +1,86 @@
+{%- if block.settings.enabled -%}
+  <div class="smartstack-upsell-block" data-block-id="{{ block.id }}">
+    <h2>{{ block.settings.heading }}</h2>
+    {% if block.settings.description %}
+      <p>{{ block.settings.description }}</p>
+    {% endif %}
+    
+    <div class="smartstack-products">
+      {% for product_id in block.settings.products %}
+        {% assign product = all_products[product_id] %}
+        {% if product %}
+          <div class="smartstack-product">
+            {% if product.featured_image %}
+              <img src="{{ product.featured_image | image_url: width: 300 }}" alt="{{ product.title }}">
+            {% endif %}
+            <h3>{{ product.title }}</h3>
+            <p class="price">{{ product.price | money }}</p>
+            <button 
+              class="smartstack-button"
+              data-product-id="{{ product.id }}"
+              style="background-color: {{ block.settings.button_background }}; color: {{ block.settings.button_color }}"
+            >
+              {{ block.settings.button_text }}
+            </button>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+{%- endif -%}
+
+<style>
+  .smartstack-upsell-block {
+    padding: 2rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    margin: 2rem 0;
+  }
+
+  .smartstack-upsell-block h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+  }
+
+  .smartstack-products {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+  }
+
+  .smartstack-product {
+    text-align: center;
+  }
+
+  .smartstack-product img {
+    width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .smartstack-button {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    font-weight: 600;
+    transition: opacity 0.2s;
+  }
+
+  .smartstack-button:hover {
+    opacity: 0.9;
+  }
+</style>
+
+<script>
+  document.querySelectorAll('.smartstack-button').forEach(button => {
+    button.addEventListener('click', function() {
+      const productId = this.getAttribute('data-product-id');
+      // Handle product add to cart
+      console.log('Add product to cart:', productId);
+    });
+  });
+</script>

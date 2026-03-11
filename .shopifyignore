@@ -1,0 +1,14 @@
+node_modules
+.env
+.env.local
+.git
+.gitignore
+dist
+build
+.DS_Store
+*.log
+.vscode
+.idea
+*.swp
+*.swo
+README.md
