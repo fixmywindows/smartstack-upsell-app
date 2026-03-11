@@ -11,3 +11,7 @@ build/
 *.swp
 *.swo
 prisma/dev.db
+
+# ignore compiled JavaScript in app folder, we ship TypeScript instead
+app/**/*.js
+app/**/*.js.map
