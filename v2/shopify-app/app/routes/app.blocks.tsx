@@ -4,6 +4,7 @@ import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { ensureShop } from "../services/catalogue.server";
 import { PLANS, canCreateSet, validPlan } from "../utils/plan-limits";
+import { countRuleConditions, normaliseRuleGroups } from "../utils/rule-groups";
 
 const types = [
   { id: "similar", label: "Similar products", description: "Comparable alternatives for each product." },
@@ -127,6 +128,10 @@ export default function BlockWorkspace(){
             const ids=asStrings(set.pinnedIds);
             const trigger=set.sourceMatch==="all"?"All products":set.sourceMatch==="products"?
               asStrings(set.sourceProductIds).length+" selected products":"Products matching conditions";
+            const triggerCount=countRuleConditions(normaliseRuleGroups(set.sourceRules,set.sourceLogic));
+            const targetCount=countRuleConditions(normaliseRuleGroups(set.targetRules,set.targetLogic));
+            const excludeCount=countRuleConditions(normaliseRuleGroups(set.excludeRules,set.excludeLogic));
+            const banned=asStrings(set.excludedProductIds).length;
             return <article key={set.id} style={{...panel,padding:16}}>
               <div style={{display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
                 <div style={{flex:"1 1 270px",minWidth:0}}>
@@ -140,6 +145,11 @@ export default function BlockWorkspace(){
                   </div>
                   <p style={{...muted,margin:"8px 0"}}>{trigger} · {set.selectionMode==="ai"?
                     "Automatic":set.selectionMode==="manual"?"Manual":"Hybrid"} · Priority {set.priority}</p>
+                  <p style={{...muted,margin:"5px 0 10px"}}>
+                    {triggerCount} trigger conditions · {targetCount} candidate filters ·
+                    {" "}{excludeCount+banned} exclusions ·
+                    {" "}{set.fallbackMode==="stop"?"Stop if empty":"Try next set if empty"}
+                  </p>
                   <div style={{display:"flex",alignItems:"center",gap:7}}>
                     {ids.slice(0,3).map(id=>{
                       const p=photoMap.get(id);
@@ -153,6 +163,9 @@ export default function BlockWorkspace(){
                 <div style={{display:"flex",flexWrap:"wrap",gap:6,alignItems:"start"}}>
                   {!set.archived&&<>
                     <Link style={btn} to={"/app/sets/"+encodeURIComponent(set.id)}>Edit</Link>
+                    <Link style={btn} to={"/app/preview?kind="+data.kind+"&set="+encodeURIComponent(set.id)}>
+                      Preview
+                    </Link>
                     <Form method="post"><input type="hidden" name="setId" value={set.id}/>
                       <input type="hidden" name="kind" value={data.kind}/>
                       <button style={btn} name="intent" value="duplicate" disabled={!data.canAdd}>Duplicate</button></Form>
