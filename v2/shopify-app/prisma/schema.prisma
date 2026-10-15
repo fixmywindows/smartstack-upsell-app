@@ -107,6 +107,10 @@ model RecommendationRuleSet {
   targetRules      Json         @default("[]")
   targetLogic      String       @default("AND")
   excludeTags      Json         @default("[]")
+  excludedProductIds Json       @default("[]")
+  excludeRules     Json         @default("[]")
+  excludeLogic     String       @default("OR")  // Combine exclusion groups
+  fallbackMode     String       @default("next") // next matching set, or stop
   maxItems         Int          @default(3)
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt

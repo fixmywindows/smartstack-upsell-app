@@ -47,9 +47,9 @@ jobs:
       - name: Validate Prisma schema
         working-directory: v2/shopify-app
         run: npx prisma validate
-      - name: Test theme extension sources
+      - name: Test theme and Phase 2 rule engine
         working-directory: v2/shopify-app
-        run: node --test tests/widget.test.mjs
+        run: node --test tests/widget.test.mjs tests/phase2-rules.test.mjs
       - name: Typecheck app
         working-directory: v2/shopify-app
         run: npm run typecheck
@@ -106,6 +106,28 @@ jobs:
             END IF;
             IF (SELECT COUNT(*) FROM "RecommendationBlock" WHERE id='legacy-test') <> 1 THEN
               RAISE EXCEPTION 'Legacy block was changed';
+            END IF;
+          END $$;
+          SQL
+      - name: Validate Phase 2 additive migration
+        working-directory: v2/shopify-app
+        env:
+          PGPASSWORD: test
+        run: |
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U test -d smartstack_test <<'SQL'
+          DO $$
+          DECLARE
+            r record;
+          BEGIN
+            SELECT * INTO r FROM "RecommendationRuleSet" WHERE "legacyBlockId"='legacy-test';
+            IF NOT FOUND THEN RAISE EXCEPTION 'Phase 1 set missing after Phase 2 migration'; END IF;
+            IF r."fallbackMode" <> 'next' THEN RAISE EXCEPTION 'Fallback default incorrect'; END IF;
+            IF r."excludeLogic" <> 'OR' THEN RAISE EXCEPTION 'Exclusion grouping incorrect'; END IF;
+            IF r."excludedProductIds" <> '[]'::jsonb OR r."excludeRules" <> '[]'::jsonb THEN
+              RAISE EXCEPTION 'Exclusions must default to empty lists';
+            END IF;
+            IF r."pinnedIds" <> '["gid://shopify/Product/12"]'::jsonb THEN
+              RAISE EXCEPTION 'Merchant pins were altered';
             END IF;
           END $$;
           SQL

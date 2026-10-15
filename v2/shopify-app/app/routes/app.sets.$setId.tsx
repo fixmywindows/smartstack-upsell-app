@@ -5,6 +5,7 @@ import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { ensureShop } from "../services/catalogue.server";
 import { PLANS, canCreateSet, validPlan } from "../utils/plan-limits";
+import { groupsForEditor, countRuleConditions, type MatchGroup, type MatchRule } from "../utils/rule-groups";
 
 const TYPES = [
   { id: "similar", label: "Similar products", heading: "Similar products" },
@@ -18,7 +19,7 @@ type ProductItem = {
   productId: string; title: string; imageUrl: string|null; category: string;
   priceMinor: number; currencyCode: string; available: boolean; published: boolean;
 };
-type Rule = { field: string; op: string; value: string };
+
 const FIELDS = [
   {value:"tags",label:"Product tag"},
   {value:"title",label:"Product title"},
@@ -26,15 +27,20 @@ const FIELDS = [
   {value:"product_type",label:"Product type"},
   {value:"vendor",label:"Vendor"},
   {value:"collections",label:"Collection"},
-  {value:"price",label:"Price"}
+  {value:"price",label:"Price"},
+  {value:"available",label:"Availability"}
 ] as const;
 const OPERATORS = [
   {value:"equals",label:"Equals"},
+  {value:"not_equals",label:"Does not equal"},
   {value:"contains",label:"Contains"},
   {value:"not_contains",label:"Does not contain"},
   {value:"any_of",label:"Is any of (comma-separated)"},
+  {value:"all_of",label:"Includes all of (comma-separated)"},
   {value:"gte",label:"Greater than or equal to"},
-  {value:"lte",label:"Less than or equal to"}
+  {value:"lte",label:"Less than or equal to"},
+  {value:"exists",label:"Has a value"},
+  {value:"not_exists",label:"Has no value"}
 ] as const;
 const selectStyle: React.CSSProperties = {
   boxSizing:"border-box", width:"100%", minHeight:40, border:"1px solid #cbd0d9",
@@ -52,11 +58,7 @@ const buttonStyle: React.CSSProperties = {
 
 const strArr = (value:unknown):string[] =>
   Array.isArray(value)?value.filter((v):v is string=>typeof v==="string"):[];
-function parseRules(value:unknown):Rule[]{
-  return Array.isArray(value)?value.filter(v=>v&&typeof v==="object"&&typeof v.field==="string")
-    .map(v=>({field:String(v.field),op:String(v.op||"contains"),
-      value:String(v.field==="price"&&typeof v.value==="number"?v.value/100:v.value??"")})):[];
-}
+
 
 export const loader = async ({request,params}:LoaderFunctionArgs)=>{
   const {session}=await authenticate.admin(request);
@@ -77,7 +79,8 @@ export const loader = async ({request,params}:LoaderFunctionArgs)=>{
     "Your plan's set limit has been reached. Return to Recommendation sets.",{status:403}
   );
   const selectedIds=[...new Set([
-    ...strArr(existing?.pinnedIds),...strArr(existing?.sourceProductIds)
+    ...strArr(existing?.pinnedIds),...strArr(existing?.sourceProductIds),
+    ...strArr(existing?.excludedProductIds)
   ])];
   const [recent, selected, attributes] = await Promise.all([
     db.productSnapshot.findMany({
@@ -181,51 +184,120 @@ function ProductPicker({name,selected,onChange,initial}:{
   </div>;
 }
 
-function RuleConditions({label,rules,onChange,logic,setLogic,keys,categories,remaining}:{
-  label:string;rules:Rule[];onChange:(rules:Rule[])=>void;logic:string;setLogic:(s:string)=>void;
-  keys:string[];categories:string[];remaining:number|null;
+/**
+ * A merchant-friendly two-level AND/OR editor.
+ * All/Any inside each group, and All/Any across groups.
+ */
+function RuleGroups({label,groups,onChange,outerLogic,setOuterLogic,keys,categories,remaining,excluded=false}:{
+  label:string;groups:MatchGroup[];onChange:(groups:MatchGroup[])=>void;
+  outerLogic:string;setOuterLogic:(v:string)=>void;keys:string[];categories:string[];
+  remaining:number|null;excluded?:boolean;
 }){
   const fieldOptions=[...FIELDS,...keys.map(key=>({value:"metafield:"+key,label:"Metafield: "+key}))];
-  const update=(index:number,patch:Partial<Rule>)=>onChange(rules.map((r,i)=>i===index?{...r,...patch}:r));
-  return <div style={{display:"grid",gap:9}}>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+  const valueStyle={...selectStyle,minWidth:0};
+  const canAdd=remaining===null||remaining>0;
+  const updateGroup=(index:number,group:MatchGroup)=>{
+    onChange(groups.map((g,i)=>i===index?group:g));
+  };
+  const addCondition=(index:number)=>{
+    if(!canAdd)return;
+    updateGroup(index,{...groups[index],rules:[...groups[index].rules,{field:"tags",op:"contains",value:""}]});
+  };
+  const removeCondition=(groupIndex:number,ruleIndex:number)=>{
+    const group=groups[groupIndex];
+    if(group.rules.length<=1)onChange(groups.filter((_,i)=>i!==groupIndex));
+    else updateGroup(groupIndex,{...group,rules:group.rules.filter((_,i)=>i!==ruleIndex)});
+  };
+  const updateRule=(groupIndex:number,ruleIndex:number,patch:Partial<MatchRule>)=>{
+    const group=groups[groupIndex];
+    updateGroup(groupIndex,{...group,rules:group.rules.map((r,i)=>i===ruleIndex?{...r,...patch}:r)});
+  };
+  return <div style={{display:"grid",gap:12}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
       <strong style={{fontSize:14}}>{label}</strong>
-      <label style={{fontSize:12}}>Match conditions
-        <select aria-label={label+" matching logic"} style={{...selectStyle,width:100,display:"block"}}
-          value={logic} onChange={e=>setLogic(e.target.value)}>
-          <option value="AND">ALL</option><option value="OR">ANY</option>
+      {groups.length>1&&<label style={{fontSize:12,display:"flex",alignItems:"center",gap:8}}>
+        Across groups:
+        <select aria-label={label+" across groups"} style={{...selectStyle,width:166}}
+          value={outerLogic} onChange={e=>setOuterLogic(e.target.value)}>
+          <option value="AND">Match ALL groups</option>
+          <option value="OR">Match ANY group</option>
         </select>
-      </label>
+      </label>}
     </div>
-    {rules.length===0&&<p style={{...muted,margin:0}}>No conditions — leave empty to avoid filtering by attributes.</p>}
-    {rules.map((rule,index)=><div key={index} style={{display:"grid",
-      gridTemplateColumns:"repeat(auto-fit,minmax(135px,1fr))",gap:8,alignItems:"center",
-      background:"#f7f7f9",borderRadius:8,padding:11}}>
-      <select aria-label="Product attribute" style={selectStyle} value={rule.field}
-        onChange={e=>update(index,{field:e.target.value,value:""})}>
-        {fieldOptions.map(f=><option key={f.value} value={f.value}>{f.label}</option>)}
-      </select>
-      <select aria-label="Condition" style={selectStyle} value={rule.op}
-        onChange={e=>update(index,{op:e.target.value})}>
-        {OPERATORS.map(op=><option key={op.value} value={op.value}>{op.label}</option>)}
-      </select>
-      {rule.field==="category"?<select aria-label="Category" style={selectStyle}
-        value={rule.value} onChange={e=>update(index,{value:e.target.value})}>
-        <option value="">Select category</option>
-        {categories.map(category=><option key={category} value={category}>{category}</option>)}
-        {rule.value&&!categories.includes(rule.value)&&<option value={rule.value}>{rule.value}</option>}
-      </select>:<input aria-label="Condition value" style={selectStyle} type={rule.field==="price"?"number":"text"}
-        step={rule.field==="price"?"0.01":undefined} min={rule.field==="price"?"0":undefined}
-        value={rule.value} placeholder={rule.field.startsWith("metafield:")?"Metafield value":"Value"}
-        onChange={e=>update(index,{value:e.target.value})}/>}
-      <button type="button" style={{...buttonStyle,color:"#a43630"}} onClick={()=>
-        onChange(rules.filter((_,i)=>i!==index))}>Remove</button>
+    {groups.length===0&&<p style={{...muted,margin:0}}>
+      {excluded?"No additional attribute exclusions.":"No conditions yet — all eligible products can match."}
+    </p>}
+    {groups.map((group,gi)=><div key={gi} style={{
+      background:"#f8f9fb",border:"1px solid #e0e3e9",borderRadius:10,padding:15,display:"grid",gap:11
+    }}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        <strong style={{fontSize:13}}>Group {gi+1}</strong>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{...muted,fontSize:12}}>Within group</span>
+          <select aria-label={"Group "+(gi+1)+" logic"} style={{...selectStyle,width:148}}
+            value={group.logic} onChange={e=>updateGroup(gi,{...group,logic:e.target.value==="OR"?"OR":"AND"})}>
+            <option value="AND">All conditions</option>
+            <option value="OR">Any condition</option>
+          </select>
+          <button type="button" style={{...buttonStyle,color:"#a43731",padding:"8px 10px"}}
+            onClick={()=>onChange(groups.filter((_,i)=>i!==gi))}>Remove group</button>
+        </div>
+      </div>
+      {group.rules.map((rule,ri)=><div key={ri} style={{display:"grid",
+        gridTemplateColumns:"repeat(auto-fit,minmax(135px,1fr))",gap:9,alignItems:"center"}}>
+        <select aria-label={"Group "+(gi+1)+" attribute "+(ri+1)}
+          style={valueStyle} value={rule.field}
+          onChange={e=>updateRule(gi,ri,{field:e.target.value,value:"",op:"equals"})}>
+          {fieldOptions.map(f=><option key={f.value} value={f.value}>{f.label}</option>)}
+        </select>
+        <select aria-label={"Group "+(gi+1)+" operator "+(ri+1)}
+          style={valueStyle} value={rule.op}
+          onChange={e=>updateRule(gi,ri,{op:e.target.value})}>
+          {OPERATORS.filter(op=>!["gte","lte"].includes(op.value) ||
+            rule.field==="price" || rule.field.startsWith("metafield:")).map(op=>
+            <option key={op.value} value={op.value}>{op.label}</option>)}
+        </select>
+        {["exists","not_exists"].includes(rule.op)
+          ?<span style={{...muted,padding:"8px 3px"}}>No value needed</span>
+          :rule.field==="available"?
+          <select aria-label={"Availability value "+(ri+1)} style={valueStyle}
+            value={String(rule.value)} onChange={e=>updateRule(gi,ri,{value:e.target.value})}>
+            <option value="">Choose status</option>
+            <option value="true">Available</option>
+            <option value="false">Unavailable</option>
+          </select>
+          :rule.field==="category"?
+          <select aria-label={"Category value "+(ri+1)} style={valueStyle}
+            value={String(rule.value)} onChange={e=>updateRule(gi,ri,{value:e.target.value})}>
+            <option value="">Choose a category</option>
+            {categories.map(category=><option key={category} value={category}>{category}</option>)}
+            {rule.value&&!categories.includes(String(rule.value))&&
+              <option value={String(rule.value)}>{String(rule.value)}</option>}
+          </select>
+          :<input aria-label={"Condition value "+(ri+1)} style={valueStyle}
+            type={rule.field==="price"?"number":"text"}
+            step={rule.field==="price"?"0.01":undefined}
+            min={rule.field==="price"?"0":undefined}
+            value={String(rule.value)} placeholder={rule.field.startsWith("metafield:")?
+              "Metafield value":rule.field==="price"?"Price in store currency":"Value"}
+            onChange={e=>updateRule(gi,ri,{value:e.target.value})}/>}
+        <button type="button" style={{...buttonStyle,color:"#a43731"}}
+          onClick={()=>removeCondition(gi,ri)} aria-label={"Remove condition "+(ri+1)}>
+          Remove
+        </button>
+      </div>)}
+      <button type="button" disabled={!canAdd} style={{...buttonStyle,justifySelf:"start"}}
+        onClick={()=>addCondition(gi)}>+ Add condition</button>
     </div>)}
-    <button type="button" style={{...buttonStyle,justifySelf:"start"}}
-      disabled={remaining!==null&&remaining<=0}
-      onClick={()=>onChange([...rules,{field:"tags",op:"contains",value:""}])}>
-      + Add condition
-    </button>
+    <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+      <button type="button" disabled={!canAdd} style={{...buttonStyle,justifySelf:"start"}}
+        onClick={()=>onChange([...groups,{logic:"AND",rules:[{field:"tags",op:"contains",value:""}]}])}>
+        + Add condition group
+      </button>
+      <span style={muted}>
+        {remaining===null?"Unlimited conditions available":remaining+" condition(s) remaining"}
+      </span>
+    </div>
   </div>;
 }
 
@@ -244,12 +316,17 @@ export default function SetEditor(){
   const [maxItems,setMaxItems]=useState(Number(existing?.maxItems??(data.kind==="bundle"?3:3)));
   const [sourceProductIds,setSourceProductIds]=useState(strArr(existing?.sourceProductIds));
   const [pinnedIds,setPinnedIds]=useState(strArr(existing?.pinnedIds));
-  const [sourceRules,setSourceRules]=useState<Rule[]>(parseRules(existing?.sourceRules));
-  const [targetRules,setTargetRules]=useState<Rule[]>(parseRules(existing?.targetRules));
+  const [sourceGroups,setSourceGroups]=useState<MatchGroup[]>(groupsForEditor(existing?.sourceRules,existing?.sourceLogic));
+  const [targetGroups,setTargetGroups]=useState<MatchGroup[]>(groupsForEditor(existing?.targetRules,existing?.targetLogic));
+  const [excludeGroups,setExcludeGroups]=useState<MatchGroup[]>(groupsForEditor(existing?.excludeRules,existing?.excludeLogic));
   const [sourceLogic,setSourceLogic]=useState(existing?.sourceLogic||"AND");
   const [targetLogic,setTargetLogic]=useState(existing?.targetLogic||"AND");
   const [excludeTags,setExcludeTags]=useState(strArr(existing?.excludeTags).join(", "));
-  const rulesUsed=(sourceMatch==="rules"?sourceRules.length:0)+targetRules.length;
+  const [excludedProductIds,setExcludedProductIds]=useState(strArr(existing?.excludedProductIds));
+  const [excludeLogic,setExcludeLogic]=useState(existing?.excludeLogic||"OR");
+  const [fallbackMode,setFallbackMode]=useState(existing?.fallbackMode||"next");
+  const rulesUsed=(sourceMatch==="rules"?countRuleConditions(sourceGroups):0)
+    +countRuleConditions(targetGroups)+countRuleConditions(excludeGroups);
   const freeSlots=data.ruleCap===null?null:Math.max(0,data.ruleCap-rulesUsed);
   const saving=navigation.state!=="idle";
   const pickerTitle=(title:string,description:string)=><div style={{marginBottom:13}}>
@@ -268,8 +345,11 @@ export default function SetEditor(){
         <input type="hidden" name="kind" value={data.kind}/>
         <input type="hidden" name="sourceProductIds" value={JSON.stringify(sourceProductIds)}/>
         <input type="hidden" name="pinnedIds" value={JSON.stringify(pinnedIds)}/>
-        <input type="hidden" name="sourceRules" value={JSON.stringify(sourceMatch==="rules"?sourceRules:[])}/>
-        <input type="hidden" name="targetRules" value={JSON.stringify(targetRules)}/>
+        <input type="hidden" name="sourceRules" value={JSON.stringify(sourceMatch==="rules"?sourceGroups:[])}/>
+        <input type="hidden" name="targetRules" value={JSON.stringify(targetGroups)}/>
+        <input type="hidden" name="excludeRules" value={JSON.stringify(excludeGroups)}/>
+        <input type="hidden" name="excludeLogic" value={excludeLogic}/>
+        <input type="hidden" name="excludedProductIds" value={JSON.stringify(excludedProductIds)}/>
         <input type="hidden" name="sourceLogic" value={sourceLogic}/>
         <input type="hidden" name="targetLogic" value={targetLogic}/>
         <section style={box}>
@@ -301,8 +381,8 @@ export default function SetEditor(){
           </div>
           {sourceMatch==="products"&&<ProductPicker name="_unused_source" initial={data.products}
             selected={sourceProductIds} onChange={setSourceProductIds}/>}
-          {sourceMatch==="rules"&&<RuleConditions label="Trigger conditions" rules={sourceRules}
-            onChange={setSourceRules} logic={sourceLogic} setLogic={setSourceLogic}
+          {sourceMatch==="rules"&&<RuleGroups label="Trigger conditions" groups={sourceGroups}
+            onChange={setSourceGroups} outerLogic={sourceLogic} setOuterLogic={setSourceLogic}
             keys={data.metafieldKeys} categories={data.categories} remaining={freeSlots}/>}
           {sourceMatch==="all"&&<p style={{...muted,background:"#f7f7f9",padding:12,borderRadius:7}}>
             This set is a general fallback. Give more specific sets a smaller priority number.</p>}
@@ -323,14 +403,26 @@ export default function SetEditor(){
               selected={pinnedIds} onChange={setPinnedIds}/>
           </>}
           {pickerTitle("Optional candidate filters","Filter eligible recommendations by categories, product tags, metafields, titles and more.")}
-          <RuleConditions label="Recommended product conditions" rules={targetRules} onChange={setTargetRules}
-            logic={targetLogic} setLogic={setTargetLogic} keys={data.metafieldKeys}
+          <RuleGroups label="Recommended product conditions" groups={targetGroups} onChange={setTargetGroups}
+            outerLogic={targetLogic} setOuterLogic={setTargetLogic} keys={data.metafieldKeys}
             categories={data.categories} remaining={freeSlots}/>
           <label style={{...labelStyle,marginTop:18}}>Exclude products carrying these tags
             <input name="excludeTags" style={{...selectStyle,marginTop:6}} value={excludeTags}
               onChange={e=>setExcludeTags(e.target.value)} placeholder="clearance, discontinued"/>
           </label>
           <p style={muted}>Separate tags with commas. Unavailable and unpublished products are excluded automatically.</p>
+          <details style={{marginTop:20,padding:14,border:"1px solid #e1e4eb",borderRadius:10}}>
+            <summary style={{cursor:"pointer",fontWeight:650,fontSize:14}}>Advanced exclusions</summary>
+            <p style={muted}>These hard exclusions always win, even for manually pinned products.</p>
+            <label style={labelStyle}>Never recommend these products</label>
+            <ProductPicker name="_unused_exclusions" initial={data.products}
+              selected={excludedProductIds} onChange={setExcludedProductIds}/>
+            <div style={{marginTop:18}}>
+              <RuleGroups label="Exclude products when these conditions match" groups={excludeGroups}
+                onChange={setExcludeGroups} outerLogic={excludeLogic} setOuterLogic={setExcludeLogic}
+                keys={data.metafieldKeys} categories={data.categories} remaining={freeSlots} excluded/>
+            </div>
+          </details>
         </section>
         <section style={box}>
           {pickerTitle("4. Display and prioritise","Fine-tune this set's selection order and number of add-ons.")}
@@ -345,7 +437,15 @@ export default function SetEditor(){
                 onChange={e=>setMaxItems(Number(e.target.value))}/>
             </label>
           </div>
-          <p style={muted}>The highest-priority matching active set is used. General fallback sets should have priority 100.
+          <label style={{...labelStyle,marginTop:16}}>If this set finds no eligible recommendations
+            <select name="fallbackMode" style={{...selectStyle,marginTop:6}} value={fallbackMode}
+              onChange={e=>setFallbackMode(e.target.value)}>
+              <option value="next">Try the next matching recommendation set</option>
+              <option value="stop">Show nothing for this block</option>
+            </select>
+          </label>
+          <p style={muted}>Smaller priority numbers run first. Sets with the same priority favour
+            selected products, then attribute rules, then all-products fallbacks. General fallbacks should use priority 100.
             Bundle discounts and commission billing remain disabled during testing.</p>
           <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"center",flexWrap:"wrap",marginTop:24}}>
             <div style={{display:"flex",gap:9}}>
@@ -354,8 +454,8 @@ export default function SetEditor(){
               </button>
               <Link to={"/app/blocks?kind="+data.kind} style={{...buttonStyle,textDecoration:"none"}}>Cancel</Link>
             </div>
-            <Link to={"/app/preview?kind="+data.kind} style={{color:"#4540a4",fontSize:13}}>
-              Preview matches →
+            <Link to={"/app/preview?kind="+data.kind+(existing?"&set="+encodeURIComponent(existing.id):"")} style={{color:"#4540a4",fontSize:13}}>
+              {existing?"Preview this saved set →":"Save the set to preview matches →"}
             </Link>
           </div>
         </section>
