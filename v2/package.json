@@ -1,0 +1,12 @@
+{
+  "name": "smartstack-recommendations-v2",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "SmartStack v2: hybrid Shopify product recommendations — isolated engine and interactive prototype",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "preview": "node src/dev-server.mjs"
+  },
+  "engines": {"node": ">=20"}
+}
