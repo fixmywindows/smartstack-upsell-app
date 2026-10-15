@@ -64,3 +64,14 @@ test('requests identify separate block kinds and never bill add-to-cart',()=>{
   assert.match(js,/searchParams\.set\('kind',kind\)/);
   assert.doesNotMatch(js,/billingMeter\.charge|chargeUsage|_smartstack_token/);
 });
+
+test('Shopify range settings offer at least three selectable values', () => {
+  for (const setting of schema.settings.filter(s => s.type === 'range')) {
+    assert.ok(Number.isFinite(setting.step) && setting.step > 0, `Invalid step on ${setting.id}`);
+    assert.ok((setting.max - setting.min) / setting.step >= 2,
+      `Range ${setting.id} must have at least three steps`);
+  }
+  const mobile = setting('mobile_columns');
+  assert.equal(mobile.type, 'select');
+  assert.deepEqual(mobile.options.map(o => o.value), ['1', '2']);
+});
