@@ -44,20 +44,31 @@ export async function getRecommendations(shopDomain: string, sourceId: string, k
       ruleGroups: arrayValue(block.ruleGroups),
     },
   });
+  const mapProduct = (p: typeof products[number]) => ({
+    id: p.id,
+    title: p.title,
+    url: "/products/" + encodeURIComponent(p.handle),
+    imageUrl: p.imageUrl,
+    available: p.available,
+    variantId: p.variantId?.split("/").pop() || "",
+    priceMinor: p.priceCents,
+    currencyCode: p.currencyCode || "GBP",
+    priceFormatted: new Intl.NumberFormat("en-GB", {
+      style: "currency", currency: p.currencyCode || "GBP",
+    }).format(p.priceCents / 100),
+  });
   return {
     heading: results.heading,
     basis: results.basis,
     warning: results.warning,
-    items: (results.items as Array<{product: typeof products[number]}>).map(({ product: p }) => ({
-      id: p.id, title: p.title,
-      url: "/products/" + encodeURIComponent(p.handle),
-      imageUrl: p.imageUrl,
-      available: p.available,
-      variantId: p.variantId?.split("/").pop() || "",
-      priceFormatted: new Intl.NumberFormat("en-GB", {
-        style: "currency", currency: p.currencyCode || "GBP",
-      }).format(p.priceCents / 100),
-      // Billing is disabled: no attribution token is issued.
-    })),
+    // Bundles always include the currently viewed product. No discount is applied yet.
+    source: kind === "bundle" ? mapProduct(results.source as typeof products[number]) : null,
+    items: (results.items as Array<{product: typeof products[number]; evidence?: string; count?: number | null}>)
+      .map(({ product, evidence, count }) => ({
+        ...mapProduct(product),
+        reason: evidence === "merchant" ? "Manually pinned"
+          : evidence === "observed" ? "Ordered together " + (count ?? 0) + " times"
+          : "Matched from catalogue attributes",
+      })),
   };
 }
