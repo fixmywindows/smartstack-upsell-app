@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { Form, useActionData, useLoaderData } from "react-router";
+import { Form, Link, useActionData, useLoaderData } from "react-router";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { ensureShop } from "../services/catalogue.server";
@@ -73,7 +73,8 @@ export default function Blocks() {
   const lookup = (kind: string) => blocks.find((b) => b.kind === kind);
   return <s-page heading="Recommendation blocks">
     <s-section heading="Configure all four types">
-      <p style={{ maxWidth: 700 }}>All blocks can use automatic (catalogue heuristics), manual selections, or hybrid. Manual selections override automatic rankings, while availability and hard exclusions always apply.</p>
+      <p style={{ maxWidth: 700 }}>Choose how each recommendation type works. Manual selections outrank automatic matching, but availability and exclusions always apply. The automatic option currently uses catalogue rules, not a connected AI service.</p>
+      <p style={{ marginTop: 12 }}><Link to="/app/preview">Preview recommendations for any synced product →</Link></p>
       {saved?.saved && <p role="status" style={{ color: "#17694a" }}>Saved {saved.saved}. {saved.enabled ? "Block enabled." : "Block is disabled."}</p>}
       {saved?.error && <p role="alert" style={{ color: "#b42318" }}>{saved.error}</p>}
       {BLOCK_KINDS.map((kind) => {
@@ -86,7 +87,7 @@ export default function Blocks() {
           {kind === "bundle" && <p style={{ color: "#69707c" }}>Bundles can display 1–3 recommended add-ons. Discounted checkout is not enabled in this pilot.</p>}
           <Form method="post">
             <input type="hidden" name="kind" value={kind} />
-            <label style={labelStyle}><input type="checkbox" name="enabled" defaultChecked={Boolean(b?.enabled)} /> Publish on development theme</label>
+            <label style={labelStyle}><input type="checkbox" name="enabled" defaultChecked={Boolean(b?.enabled)} /> Enable this block type</label>
             <label style={labelStyle}>Heading</label>
             <input style={controlStyle} type="text" name="heading" defaultValue={b?.heading ?? BLOCK_TITLES[kind]} maxLength={110} />
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 14 }}>

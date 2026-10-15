@@ -33,6 +33,7 @@ export default function Dashboard() {
       <ol style={{ lineHeight: 2 }}>
         <li><Link to="/app/catalogue">Sync your catalogue</Link> — 25 products per batch, including tags and metafields.</li>
         <li><Link to="/app/blocks">Configure recommendation blocks</Link> — Similar, Complementary, Bought together, or Bundle.</li>
+        <li><Link to="/app/preview">Preview product matches</Link> before editing the storefront.</li>
         <li>In a <strong>draft development theme</strong>, add the SmartStack app block and preview on a product page.</li>
       </ol>
       <p style={{ color: "#626775" }}>Connected store: {shop}. No live checkout discounts, commission collection or personalisation is active.</p>
