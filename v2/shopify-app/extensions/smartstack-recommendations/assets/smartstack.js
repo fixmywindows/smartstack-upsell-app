@@ -15,8 +15,8 @@
       if(!proxy.startsWith('/')||proxy.startsWith('//'))return;
       const url=new URL(proxy.replace(/\/$/,'')+'/recommendations',location.origin);
       url.searchParams.set('product_id',productId);url.searchParams.set('kind',block.dataset.blockKind||'complement');url.searchParams.set('max',block.dataset.maxItems||'3');
-      const response=await fetch(url,{credentials:'same-origin',headers:{'Accept':'application/json'}});
-      if(!response.ok)throw new Error('Recommendations unavailable');
+      const response=await fetch(url,{credentials:'same-origin',headers:{'Accept':'application/json','ngrok-skip-browser-warning':'1'}});
+      if(!response.ok)throw new Error('Recommendation endpoint returned HTTP '+response.status);
       const data=await response.json();
       if(!data||!Array.isArray(data.items)||!data.items.length)return;
       const heading=block.querySelector('.smartstack-recommendations__title');
@@ -56,7 +56,7 @@
       if(grid.childElementCount)block.hidden=false;
     }catch(error){
       // Fail closed: a network issue should never break the merchant's storefront.
-      if(window.Shopify?.designMode){const msg=block.querySelector('.smartstack-recommendations__error');msg.textContent='SmartStack preview unavailable — check app proxy connection.';block.hidden=false;msg.hidden=false;}
+      if(window.Shopify?.designMode){const msg=block.querySelector('.smartstack-recommendations__error');msg.textContent='SmartStack preview unavailable — '+(error instanceof Error ? error.message : 'check app proxy connection.');block.hidden=false;msg.hidden=false;}
     }
   }
   function initialise(){document.querySelectorAll('[data-smartstack-block]').forEach(render);}
