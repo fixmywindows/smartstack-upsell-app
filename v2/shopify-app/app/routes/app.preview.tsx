@@ -15,25 +15,31 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   const kindValue = url.searchParams.get("kind") || "similar";
   const kind = (kinds.some((option) => option.id === kindValue) ? kindValue : "similar") as typeof kinds[number]["id"];
-  const [products, blocks] = await Promise.all([
+  const [products, blocks, ruleSets] = await Promise.all([
     db.productSnapshot.findMany({
       where: { shopDomain: session.shop },
       orderBy: { title: "asc" },
       take: 300,
-      select: { productId: true, title: true, category: true, available: true, published: true },
+      select: { productId: true, title: true, category: true, imageUrl: true, available: true, published: true },
     }),
     db.recommendationBlock.findMany({
       where: { shopDomain: session.shop },
       select: { kind: true, enabled: true, mode: true, maxItems: true },
+    }),
+    db.recommendationRuleSet.findMany({
+      where: { shopDomain: session.shop, kind },
+      select: { id: true, name: true, enabled: true, archived: true, selectionMode: true, maxItems: true },
     }),
   ]);
 
   const sourceIdParam = url.searchParams.get("product");
   const sourceId = products.find((product) => product.productId === sourceIdParam)?.productId || products[0]?.productId || "";
   const currentBlock = blocks.find((block) => block.kind === kind);
+  const hasActiveSets = ruleSets.some(set => set.enabled && !set.archived);
+  const blockEnabled = ruleSets.length > 0 ? hasActiveSets : Boolean(currentBlock?.enabled);
   let result: Awaited<ReturnType<typeof import("../services/recommendations.server")["getRecommendations"]>> | null = null;
   let error = "";
-  if (sourceId && currentBlock?.enabled) {
+  if (sourceId && blockEnabled) {
     try {
       // This import must remain inside the server-only loader, never in the UI.
       const { getRecommendations } = await import("../services/recommendations.server");
@@ -44,9 +50,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
   }
   return {
-    products, blocks, kind, sourceId, result, error,
-    blockEnabled: Boolean(currentBlock?.enabled),
-    mode: currentBlock?.mode || "hybrid",
+    products, kind, sourceId, result, error,
+    blockEnabled,
+    mode: ruleSets.find(set=>set.id===result?.matchedSet?.id)?.selectionMode || currentBlock?.mode || "hybrid",
   };
 };
 
@@ -93,7 +99,11 @@ export default function RecommendationPreview() {
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "space-between" }}>
             <div>
               <div style={textSmall}>Selected source product</div>
-              <h2 style={{ margin: "4px 0", fontSize: 20 }}>{source.title}</h2>
+              <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 5 }}>
+                {source.imageUrl && <img src={source.imageUrl} alt="" style={{ width: 66, height: 66,
+                  objectFit: "contain", borderRadius: 8, background: "#f5f5f7" }}/>}
+                <h2 style={{ margin: "4px 0", fontSize: 20 }}>{source.title}</h2>
+              </div>
               <div style={textSmall}>{source.category} · {source.published ? "Published" : "Not published"} · {source.available ? "Available" : "Unavailable"}</div>
             </div>
             <div style={{ ...textSmall, background: "#f4f4f7", padding: "7px 12px", borderRadius: 30, alignSelf: "start" }}>
@@ -105,6 +115,10 @@ export default function RecommendationPreview() {
             data.error ? <p role="alert">{data.error}</p> :
               data.result?.items.length ? <>
                 <h3 style={{ fontSize: 17, marginBottom: 8 }}>{data.result.heading}</h3>
+                {data.result.matchedSet && <p style={{...textSmall,
+                  background:"#eff6f2",color:"#17603b",display:"inline-block",padding:"7px 10px",borderRadius:7}}>
+                  Matched set: {data.result.matchedSet.name} · Priority {data.result.matchedSet.priority}
+                </p>}
                 <p style={textSmall}>{data.result.items.length} recommendation(s) · {data.result.basis === "cold_start" ? "Inferred pairings — no verified purchase history" : data.result.basis === "merchant" ? "Merchant selections" : data.result.basis === "order_history" ? "Observed co-purchases" : "Catalogue attribute matching"}</p>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px,1fr))", gap: 12, marginTop: 16 }}>
                   {data.result.items.map((item) => <div key={item.id} style={{ border: "1px solid #e6e8ec", borderRadius: 10, padding: 12, minWidth: 0 }}>
