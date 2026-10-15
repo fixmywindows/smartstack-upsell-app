@@ -1,0 +1,83 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Session {
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean   @default(false)
+  locale              String?
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false)
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+  @@index([shop])
+}
+
+model MerchantShop {
+  domain          String   @id
+  cursor          String?
+  syncFinished    Boolean  @default(false)
+  productCount    Int      @default(0)
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+  products        ProductSnapshot[]
+  blocks          RecommendationBlock[]
+}
+
+model ProductSnapshot {
+  shopDomain      String
+  productId       String
+  title           String
+  handle          String
+  category        String   @default("")
+  productType     String   @default("")
+  vendor          String   @default("")
+  tags            Json
+  collections     Json
+  metafields      Json
+  variantId       String?
+  imageUrl        String?
+  priceMinor      Int      @default(0)
+  currencyCode    String   @default("GBP")
+  available       Boolean  @default(false)
+  published       Boolean  @default(false)
+  updatedAt       DateTime @updatedAt
+  shop            MerchantShop @relation(fields: [shopDomain], references: [domain], onDelete: Cascade)
+  @@id([shopDomain, productId])
+  @@index([shopDomain, category])
+}
+
+model RecommendationBlock {
+  id              String @id @default(cuid())
+  shopDomain      String
+  kind            String
+  heading         String
+  mode            String @default("hybrid")
+  enabled         Boolean @default(false)
+  maxItems        Int @default(4)
+  pinnedIds       Json
+  excludedTags    Json
+  ruleGroups      Json
+  // Discount publishing is blocked until a Shopify Discount Function is implemented.
+  discountType    String @default("none")
+  discountAmount  Int    @default(0)
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+  shop            MerchantShop @relation(fields: [shopDomain], references: [domain], onDelete: Cascade)
+  @@unique([shopDomain, kind])
+  @@index([shopDomain, enabled])
+}
