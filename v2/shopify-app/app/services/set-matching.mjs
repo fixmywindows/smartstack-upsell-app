@@ -84,7 +84,9 @@ export function resolveRuleSets({
 
     if (previewSetId || set.fallbackMode === 'stop') {
       entry.decision='stopped_empty';
-      entry.reason='No eligible recommendations; the set is configured to stop here';
+      entry.reason=previewSetId
+        ? 'Selected preview has no eligible recommendations (storefront fallback is not being simulated)'
+        : 'No eligible recommendations; the set is configured to stop here';
       trace.push(entry);
       return {selection:{set,output},trace};
     }
