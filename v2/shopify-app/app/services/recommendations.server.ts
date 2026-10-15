@@ -82,8 +82,8 @@ export async function getRecommendations(
       }),
       previewSetId:options.previewSetId || null,
     });
-    selection=resolved.selection;
-    trace=resolved.trace;
+    selection=resolved.selection as {set:typeof sets[number];output:ReturnType<typeof recommend>} | null;
+    trace=resolved.trace as typeof trace;
   } else if (legacy?.enabled && !options.previewSetId) {
     // Only for installations that have not migrated their Phase 1 settings.
     const groups = Array.isArray(legacy.ruleGroups)?legacy.ruleGroups:[];
