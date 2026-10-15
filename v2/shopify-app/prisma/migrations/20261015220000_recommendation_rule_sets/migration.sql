@@ -9,6 +9,7 @@ CREATE TABLE "RecommendationRuleSet" (
   "name" TEXT NOT NULL,
   "heading" TEXT NOT NULL,
   "enabled" BOOLEAN NOT NULL DEFAULT false,
+  "archived" BOOLEAN NOT NULL DEFAULT false,
   "priority" INTEGER NOT NULL DEFAULT 50,
   "sourceMatch" TEXT NOT NULL DEFAULT 'all',
   "sourceProductIds" JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -48,6 +49,7 @@ SELECT
   END,
   b."heading", b."enabled", 100,
   'all', '[]'::jsonb, '[]'::jsonb, 'AND', b."mode",
-  b."pinnedIds", COALESCE(b."ruleGroups"->0->'rules','[]'::jsonb), 'AND',
+  b."pinnedIds", COALESCE(b."ruleGroups"->0->'rules','[]'::jsonb),
+  CASE WHEN b."ruleGroups"->0->>'logic' = 'OR' THEN 'OR' ELSE 'AND' END,
   b."excludedTags", b."maxItems"
 FROM "RecommendationBlock" b;

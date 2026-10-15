@@ -96,6 +96,7 @@ model RecommendationRuleSet {
   name             String
   heading          String
   enabled          Boolean      @default(false)
+  archived         Boolean      @default(false)
   priority         Int          @default(50)
   sourceMatch      String       @default("all") // all, products, rules
   sourceProductIds Json         @default("[]")
