@@ -1,0 +1,39 @@
+# Connect this file to a NEW Shopify development app with: shopify app config link
+client_id = ""
+name = "SmartStack v2 Dev"
+application_url = "https://smartstack-v2-shopify.vercel.app"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+include_config_on_deploy = true
+
+[access_scopes]
+scopes = "read_products,write_app_proxy"
+
+[auth]
+redirect_urls = ["https://smartstack-v2-shopify.vercel.app/auth/callback"]
+
+[webhooks]
+api_version = "2026-10"
+
+[[webhooks.subscriptions]]
+topics = ["app/uninstalled"]
+uri = "/webhooks/app/uninstalled"
+
+[[webhooks.subscriptions]]
+topics = ["app/scopes_update"]
+uri = "/webhooks/app/scopes_update"
+
+[[webhooks.subscriptions]]
+topics = ["products/create", "products/update", "products/delete"]
+uri = "/webhooks/products/changed"
+
+[[webhooks.subscriptions]]
+compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+uri = "/webhooks/privacy"
+
+[app_proxy]
+url = "/proxy"
+prefix = "apps"
+subpath = "smartstack"

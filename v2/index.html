@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#101a30" />
+  <title>SmartStack — Recommendations Studio (Prototype)</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <script type="module" src="./src/ui.mjs"></script>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="logo"><span class="logo-mark">✳</span><span>smartstack<small>MERCHANT STUDIO</small></span></div>
+      <div class="store-choice"><span class="store-icon">D</span><span>Demo Store<small>Shopify preview</small></span><span class="chevron">⌄</span></div>
+      <div class="nav-label">WORKSPACE</div>
+      <nav aria-label="Main navigation">
+        <button class="nav-link" data-view="overview"><span>◫</span> Overview</button>
+        <button class="nav-link active" data-view="blocks"><span>▦</span> Recommendation blocks</button>
+        <button class="nav-link" data-view="rules"><span>≡</span> Matching rules</button>
+        <button class="nav-link" data-view="bundles"><span>⊞</span> Bundle settings</button>
+        <button class="nav-link" data-view="analytics"><span>↗</span> Analytics <i>Insights</i></button>
+      </nav>
+      <div class="nav-label">ACCOUNT</div>
+      <nav><button class="nav-link" data-view="pricing"><span>◈</span> Plans & billing</button></nav>
+      <div class="sidebar-bottom"><div class="avatar">SS</div><div>SmartStack v2<small>Prototype · sample data</small></div></div>
+    </aside>
+    <main class="content">
+      <header class="topbar">
+        <div class="breadcrumbs">SmartStack <span>/</span> <strong id="crumb">Recommendation blocks</strong></div>
+        <div class="top-actions"><span class="prototype-pill"><span class="pulse"></span> Demo mode</span><button class="btn btn-subtle" id="export-config">Export config ↓</button></div>
+      </header>
+      <div class="main-body">
+        <div id="view-blocks" class="view active">
+          <div class="page-heading"><div><span class="eyebrow">RECOMMENDATION STUDIO</span><h1>Make every suggestion count.</h1><p>Choose the right products, fine-tune matching rules and preview the experience your customers will see.</p></div><span class="badge-tag">4 block types</span></div>
+          <div class="block-grid" role="tablist" aria-label="Recommendation type">
+            <button class="type-card" data-kind="similar" role="tab"><span class="type-symbol peach">≋</span><span><strong>Similar products</strong><small>Help shoppers discover alternatives</small></span></button>
+            <button class="type-card active" data-kind="complement" role="tab"><span class="type-symbol violet">✦</span><span><strong>Complements</strong><small>Suggest products that work together</small></span></button>
+            <button class="type-card" data-kind="bought_together" role="tab"><span class="type-symbol mint">⌁</span><span><strong>Bought together</strong><small>Use real purchase patterns</small></span></button>
+            <button class="type-card" data-kind="bundle" role="tab"><span class="type-symbol amber">▣</span><span><strong>Bundle & save</strong><small>2–4 items, optional savings</small></span></button>
+          </div>
+          <div class="editor-grid">
+            <section class="panel controls" aria-label="Recommendation settings">
+              <div class="panel-head"><div><h2>Configure block</h2><p>Changes update the preview instantly</p></div><span class="pill-success">● Draft</span></div>
+              <div class="field"><label for="source-select">Preview source product</label><select id="source-select"></select><p class="help">This simulates a customer viewing a particular product.</p></div>
+              <div class="field"><label>How should products be selected?</label><div class="segmented" role="group" aria-label="Matching mode"><button data-mode="ai">Automatic</button><button data-mode="manual">Manual</button><button class="active" data-mode="hybrid">Hybrid</button></div><p id="mode-help" class="help">Your selections take priority; relevant products fill the remaining spaces.</p></div>
+              <div class="field"><div class="inline-between"><label for="count-select">Number of suggestions</label><span class="help-inline" id="max-hint">Up to 12</span></div><select id="count-select"><option value="2">2 products</option><option value="3" selected>3 products</option><option value="4">4 products</option><option value="6">6 products</option></select></div>
+              <div class="field"><label for="pin-select">Hand-picked recommendations</label><div class="row-fields"><select id="pin-select"></select><button class="btn btn-outline" id="add-pin" type="button">+ Add</button></div><div class="chip-list" id="pins"></div><p class="help">Pinned products are shown first in Hybrid mode. Hard exclusions still apply.</p></div>
+              <div class="field"><label for="exclude-tags">Exclude tags</label><input id="exclude-tags" placeholder="e.g. clearance, damaged"/><p class="help">Comma-separated. Excluded items never display, even if manually selected.</p></div>
+              <div class="field"><label>Matching rules <span class="mini">AND / OR</span></label><div class="rule-builder"><select id="rule-field"><option value="tags">Tag</option><option value="title">Title</option><option value="category">Category</option><option value="product_type">Product type</option><option value="vendor">Vendor</option><option value="metafield:spec.material">Metafield: material</option><option value="metafield:spec.colour">Metafield: colour</option><option value="price">Price (pence)</option></select><select id="rule-op"><option value="contains">contains</option><option value="equals">equals</option><option value="not_contains">doesn't contain</option><option value="gte">is ≥</option><option value="lte">is ≤</option></select><input id="rule-value" placeholder="value"/><button id="add-rule" class="btn btn-outline" type="button">Add rule</button></div><div id="rule-list" class="rule-list"></div><p class="help">Added rules are combined using AND. API supports OR groups too.</p></div>
+              <div id="bundle-controls" class="field hidden"><label>Bundle discount (preview)</label><div class="row-fields"><select id="discount-type"><option value="none">No discount</option><option value="percentage" selected>Percentage off</option><option value="fixed">Fixed amount off (pence)</option><option value="fixed_total">Fixed total (pence)</option></select><input id="discount-value" type="number" min="0" value="10" aria-label="Discount amount"/></div><p class="help">Discounts are previews only until a Shopify discount Function validates them at checkout.</p></div>
+              <div class="footer-actions"><button id="reset-config" class="btn btn-subtle">Reset block</button><button id="preview-button" class="btn btn-primary">Update preview →</button></div>
+            </section>
+            <section class="preview-column" aria-label="Live storefront preview">
+              <div class="panel preview-header"><div><h2>Live preview <span class="live-dot">●</span></h2><p>Simulated Shopify product page</p></div><span class="desktop-pill">▣ Desktop</span></div>
+              <div class="storefront panel"><div class="mock-nav"><b>THE EVERYDAY STORE</b><span>Shop&nbsp;&nbsp; Collections&nbsp;&nbsp; About</span><span>♡ &nbsp;🛍</span></div><div class="mock-product"><div class="product-visual" id="source-visual">🛋️</div><div class="mock-product-info"><span class="small-upper">BESTSELLER</span><h3 id="source-title">Nova 3-Seater Sofa</h3><p id="source-price">£499.00</p><div class="rating">★★★★★ <small>4.9 (demo)</small></div><div class="mock-selector">Choose an option <span>⌄</span></div><div class="mock-cart">Add to basket</div></div></div><div class="recommendation"><div class="reco-top"><div><div class="tiny-accent"></div><h3 id="preview-heading">Pairs perfectly with</h3></div><span id="preview-count" class="preview-count">3 items</span></div><div id="recommendations" class="products-grid"></div><div id="bundle-summary" class="bundle-summary hidden"></div><div id="engine-warning" class="engine-warning hidden"></div></div><div class="mock-footer">A storefront preview — no live orders, prices or discounts are changed.</div></div>
+              <div class="insight-strip"><span>✧</span><div><strong>Why these recommendations?</strong><p id="why">A merchant-approved category map and product attributes determine which items work together.</p></div></div>
+            </section>
+          </div>
+        </div>
+        <div id="view-overview" class="view"></div>
+        <div id="view-rules" class="view"></div>
+        <div id="view-bundles" class="view"></div>
+        <div id="view-analytics" class="view"></div>
+        <div id="view-pricing" class="view"></div>
+      </div>
+    </main>
+  </div>
+  <div id="toast" role="status" class="toast" aria-live="polite"></div>
+</body>
+</html>

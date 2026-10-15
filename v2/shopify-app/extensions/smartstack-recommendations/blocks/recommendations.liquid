@@ -1,0 +1,159 @@
+{% comment %}
+  SmartStack v2 product recommendations.
+  Merchants can place multiple independent blocks on product templates.
+  Keep a visible status in theme design mode, even when no products qualify.
+{% endcomment %}
+{% if product %}
+<div
+  class="smartstack-recommendations smartstack-recommendations--{{ block.settings.card_style }}"
+  data-smartstack-block
+  data-product-id="{{ product.id }}"
+  data-source-variant-id="{{ product.selected_or_first_available_variant.id }}"
+  data-block-kind="{{ block.settings.recommendation_type }}"
+  data-max-items="{{ block.settings.max_items }}"
+  data-proxy-path="{{ block.settings.proxy_path | escape }}"
+  data-heading="{{ block.settings.heading | escape }}"
+  data-layout="{{ block.settings.layout }}"
+  data-show-quick-add="{{ block.settings.quick_add }}"
+  style="--ss-accent: {{ block.settings.accent_colour }}; --ss-radius: {{ block.settings.card_radius }}px; --ss-gap: {{ block.settings.card_gap }}px; --ss-cols: {{ block.settings.desktop_columns }}; --ss-mobile-cols: {{ block.settings.mobile_columns }};"
+  {{ block.shopify_attributes }}
+  {% unless request.design_mode %}hidden{% endunless %}
+>
+  <div class="smartstack-recommendations__content" hidden>
+    <header class="smartstack-recommendations__head">
+      <h2 class="smartstack-recommendations__title"></h2>
+    </header>
+    <div class="smartstack-recommendations__body"></div>
+  </div>
+  <p class="smartstack-recommendations__status" role="status" {% unless request.design_mode %}hidden{% endunless %}>
+    {% if request.design_mode %}Loading SmartStack recommendations…{% endif %}
+  </p>
+</div>
+{% endif %}
+{% schema %}
+{
+  "name": "Smart recommendations",
+  "target": "section",
+  "stylesheet": "smartstack.css",
+  "javascript": "smartstack.js",
+  "settings": [
+    {
+      "type": "header",
+      "content": "Recommendations"
+    },
+    {
+      "type": "select",
+      "id": "recommendation_type",
+      "label": "Block type",
+      "options": [
+        {"value": "similar", "label": "Similar products"},
+        {"value": "complement", "label": "Complementary products"},
+        {"value": "bought_together", "label": "Frequently bought together"},
+        {"value": "bundle", "label": "Complete the set"}
+      ],
+      "default": "complement"
+    },
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Custom heading (optional)",
+      "info": "Leave blank to use the heading saved in SmartStack."
+    },
+    {
+      "type": "range",
+      "id": "max_items",
+      "label": "Maximum recommendations",
+      "min": 1,
+      "max": 8,
+      "step": 1,
+      "default": 3
+    },
+    {
+      "type": "header",
+      "content": "Layout and cards"
+    },
+    {
+      "type": "select",
+      "id": "layout",
+      "label": "Layout",
+      "options": [
+        {"value": "grid", "label": "Product grid"},
+        {"value": "carousel", "label": "Swipeable row"}
+      ],
+      "default": "grid"
+    },
+    {
+      "type": "select",
+      "id": "card_style",
+      "label": "Card appearance",
+      "options": [
+        {"value": "bordered", "label": "Bordered cards"},
+        {"value": "minimal", "label": "Minimal cards"}
+      ],
+      "default": "bordered"
+    },
+    {
+      "type": "range",
+      "id": "desktop_columns",
+      "label": "Desktop columns",
+      "min": 2,
+      "max": 4,
+      "step": 1,
+      "default": 3
+    },
+    {
+      "type": "select",
+      "id": "mobile_columns",
+      "label": "Mobile columns",
+      "options": [
+        {"value": "1", "label": "1 column"},
+        {"value": "2", "label": "2 columns"}
+      ],
+      "default": "2"
+    },
+    {
+      "type": "range",
+      "id": "card_gap",
+      "label": "Card spacing",
+      "min": 8,
+      "max": 28,
+      "step": 4,
+      "unit": "px",
+      "default": 16
+    },
+    {
+      "type": "range",
+      "id": "card_radius",
+      "label": "Card corner radius",
+      "min": 0,
+      "max": 24,
+      "step": 2,
+      "unit": "px",
+      "default": 12
+    },
+    {
+      "type": "checkbox",
+      "id": "quick_add",
+      "label": "Show add-to-basket buttons",
+      "default": true
+    },
+    {
+      "type": "color",
+      "id": "accent_colour",
+      "label": "Button colour",
+      "default": "#5b4bc7"
+    },
+    {
+      "type": "header",
+      "content": "Developer settings"
+    },
+    {
+      "type": "text",
+      "id": "proxy_path",
+      "label": "App proxy root path",
+      "default": "/apps/smartstack",
+      "info": "Only change this if the app proxy URL was customised."
+    }
+  ]
+}
+{% endschema %}

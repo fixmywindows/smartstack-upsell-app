@@ -1,0 +1,10 @@
+.env
+.env.*
+!.env.example
+node_modules/
+.react-router/
+build/
+.vercel/
+*.log
+*.sqlite
+*.db
