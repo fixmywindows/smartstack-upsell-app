@@ -16,6 +16,20 @@ permissions:
 jobs:
   compile:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: smartstack_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d smartstack_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
     env:
       DATABASE_URL: postgresql://test:test@127.0.0.1:5432/smartstack_test
       SHOPIFY_API_KEY: test_client_id
@@ -42,3 +56,56 @@ jobs:
       - name: Build application
         working-directory: v2/shopify-app
         run: npm run build
+      - name: Verify safe legacy-set migration
+        working-directory: v2/shopify-app
+        env:
+          PGPASSWORD: test
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U test -d smartstack_test -f prisma/migrations/20261015000000_create_smartstack_v2/migration.sql
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U test -d smartstack_test <<'SQL'
+          INSERT INTO "MerchantShop" ("domain","updatedAt")
+            VALUES ('test-shop.myshopify.com', CURRENT_TIMESTAMP);
+          INSERT INTO "RecommendationBlock"
+            ("id","shopDomain","kind","heading","mode","enabled","pinnedIds",
+             "excludedTags","ruleGroups","updatedAt","createdAt")
+          VALUES
+            ('legacy-test','test-shop.myshopify.com','complement','Pairs perfectly with',
+             'hybrid',true,'["gid://shopify/Product/12"]'::jsonb,
+             '["hidden"]'::jsonb,
+             '[{"logic":"OR","rules":[{"field":"tags","op":"contains","value":"winter"}]}]'::jsonb,
+             CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);
+          SQL
+          npx prisma migrate resolve --applied 20261015000000_create_smartstack_v2
+          npx prisma migrate deploy
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U test -d smartstack_test <<'SQL'
+          DO $$
+          DECLARE
+            r record;
+          BEGIN
+            SELECT * INTO r FROM "RecommendationRuleSet" WHERE "legacyBlockId"='legacy-test';
+            IF NOT FOUND THEN RAISE EXCEPTION 'Legacy block not migrated'; END IF;
+            IF r."name" <> 'Default Complementary Products' THEN
+              RAISE EXCEPTION 'Unexpected imported default name';
+            END IF;
+            IF r."priority" <> 100 OR r."sourceMatch" <> 'all' THEN
+              RAISE EXCEPTION 'Fallback priority or targeting changed';
+            END IF;
+            IF r."targetLogic" <> 'OR' THEN
+              RAISE EXCEPTION 'Original OR rules were not preserved';
+            END IF;
+            IF r."pinnedIds" <> '["gid://shopify/Product/12"]'::jsonb THEN
+              RAISE EXCEPTION 'Original pinned IDs were not preserved';
+            END IF;
+            IF r."excludeTags" <> '["hidden"]'::jsonb THEN
+              RAISE EXCEPTION 'Original exclusions were not preserved';
+            END IF;
+            IF r."archived" THEN RAISE EXCEPTION 'Imported set is archived'; END IF;
+            IF (SELECT plan FROM "MerchantShop" WHERE domain='test-shop.myshopify.com') <> 'free' THEN
+              RAISE EXCEPTION 'Default plan is not free';
+            END IF;
+            IF (SELECT COUNT(*) FROM "RecommendationBlock" WHERE id='legacy-test') <> 1 THEN
+              RAISE EXCEPTION 'Legacy block was changed';
+            END IF;
+          END $$;
+          SQL
