@@ -1,10 +1,11 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import db from "../db.server";
 import { canCreateSet, canUseRules, validPlan } from "../utils/plan-limits";
+import { asLogic, countRuleConditions, normaliseRuleGroups, type MatchGroup, type MatchRule } from "../utils/rule-groups";
 
 export const KIND_OPTIONS = ["similar", "complement", "bought_together", "bundle"] as const;
 export type Kind = typeof KIND_OPTIONS[number];
-export type MatchRule = { field: string; op: string; value: string | number };
+export type { MatchRule, MatchGroup };
 const ALLOWED_FIELDS = new Set(["tags","title","category","product_type","vendor","collections","price","available"]);
 const ALLOWED_OPERATORS = new Set([
   "equals","not_equals","contains","not_contains","any_of","all_of","gte","lte","exists","not_exists"
@@ -15,33 +16,69 @@ export class FormValidationError extends Error {
 }
 const bad = (message: string): never => { throw new FormValidationError(message); };
 
-function parseRules(raw: FormDataEntryValue | null): MatchRule[] {
-  let values: unknown;
-  try { values = JSON.parse(String(raw || "[]")); } catch { return bad("The matching conditions could not be read."); }
-  if (!Array.isArray(values) || values.length > 100) return bad("Invalid number of conditions.");
-  return values.map((value) => {
-    if (!value || typeof value !== "object") return bad("A matching condition is invalid.");
-    const obj = value as Record<string, unknown>;
-    const field = String(obj.field || "").trim();
-    const op = String(obj.op || "").trim();
-    let expected: string | number = String(obj.value ?? "").trim();
-    if (!ALLOWED_FIELDS.has(field) && !/^metafield:[\w-]+\.[\w-]+$/.test(field)) {
-      return bad("Choose a valid product field or metafield.");
+/** Validate all submitted conditions without silently dropping invalid entries. */
+function parseGroups(raw: FormDataEntryValue | null): MatchGroup[] {
+  let input: unknown;
+  try { input = JSON.parse(String(raw || "[]")); }
+  catch { return bad("The matching conditions could not be read."); }
+  if (!Array.isArray(input) || input.length > 20) return bad("Too many condition groups.");
+
+  const flat = input.length > 0 &&
+    input.every(v => v && typeof v === "object" && !Array.isArray(v) && "field" in v);
+  const shaped = input.length === 0 ? [] : flat
+    ? [{ logic: "AND", rules: input }]
+    : input;
+  if (!Array.isArray(shaped)) return bad("Invalid condition groups.");
+  if (shaped.some(group => !group || typeof group !== "object" || Array.isArray(group) ||
+    !("rules" in group) || !Array.isArray((group as {rules:unknown}).rules))) {
+    return bad("Every condition group must contain a list of conditions.");
+  }
+
+  let total = 0;
+  const parsed: MatchGroup[] = shaped.map(group => {
+    const obj = group as { logic?: unknown; rules: unknown[] };
+    if (obj.rules.length === 0 || obj.rules.length > 50) {
+      return bad("Each group needs between 1 and 50 conditions.");
     }
-    if (!ALLOWED_OPERATORS.has(op)) return bad("Choose a valid matching operator.");
-    if (!["exists","not_exists"].includes(op) && !expected) return bad("Enter a value for each condition.");
-    if (expected.length > 160) return bad("A condition value is too long.");
-    if (field === "price") {
-      // The UI works in merchant currency units; the engine stores integer minor units.
-      // This MVP uses the store's base currency and assumes two fractional digits.
-      const amount = Number(expected);
-      if (!Number.isFinite(amount) || amount < 0 || amount > 9999999) {
-        return bad("Enter a valid non-negative product price.");
+    total += obj.rules.length;
+    const parsedRules: MatchRule[] = obj.rules.map(value => {
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return bad("A matching condition is invalid.");
       }
-      expected = Math.round(amount * 100);
+      const item = value as Record<string, unknown>;
+      const field = String(item.field || "").trim();
+      const op = String(item.op || "").trim();
+      let expected: string | number = String(item.value ?? "").trim();
+      if (!ALLOWED_FIELDS.has(field) && !/^metafield:[\w-]+\.[\w-]+$/.test(field)) {
+        return bad("Choose a valid product field or metafield.");
+      }
+      if (!ALLOWED_OPERATORS.has(op)) return bad("Choose a valid matching operator.");
+      if (op !== "exists" && op !== "not_exists" && !expected) {
+        return bad("Enter a value for each condition.");
+      }
+      if (expected.length > 160) return bad("A condition value is too long.");
+      if ((op === "gte" || op === "lte") &&
+        field !== "price" && !field.startsWith("metafield:")) {
+        return bad("Numeric comparisons are only available for price or numeric metafields.");
+      }
+      if (op === "exists" || op === "not_exists") expected = "";
+      else if (field === "price") {
+        // The MVP uses currencies with two minor units. Validate rather than round
+        // malformed user input silently.
+        if (!/^\d+(\.\d{1,2})?$/.test(String(expected)) || Number(expected) > 9999999) {
+          return bad("Enter a valid non-negative price with up to two decimal places.");
+        }
+        expected = Math.round(Number(expected) * 100);
+      }
+      return { field, op, value: expected };
+    });
+    if (obj.logic != null && obj.logic !== "AND" && obj.logic !== "OR") {
+      return bad("Choose ALL or ANY within each condition group.");
     }
-    return { field, op, value: expected };
+    return { logic: asLogic(obj.logic), rules: parsedRules };
   });
+  if (total > 100) return bad("A set cannot contain more than 100 conditions.");
+  return parsed;
 }
 function stringArray(raw: FormDataEntryValue | null, max: number): string[] {
   let value: unknown;
@@ -59,10 +96,13 @@ const logical = (value: FormDataEntryValue | null) => value === "OR" ? "OR" : "A
 export type ValidatedRuleSet = {
   kind: Kind; name: string; heading: string; enabled: boolean; priority: number;
   sourceMatch: "all" | "products" | "rules";
-  sourceProductIds: string[]; sourceRules: MatchRule[]; sourceLogic: string;
+  sourceProductIds: string[]; sourceRules: MatchGroup[]; sourceLogic: string;
   selectionMode: "ai" | "manual" | "hybrid"; pinnedIds: string[];
-  targetRules: MatchRule[]; targetLogic: string;
-  excludeTags: string[]; maxItems: number;
+  targetRules: MatchGroup[]; targetLogic: string;
+  excludeTags: string[]; excludedProductIds: string[];
+  excludeRules: MatchGroup[]; excludeLogic: string;
+  fallbackMode: "next" | "stop";
+  maxItems: number;
 };
 
 export function parseRuleSet(form: FormData, plan: string): ValidatedRuleSet {
@@ -80,16 +120,24 @@ export function parseRuleSet(form: FormData, plan: string): ValidatedRuleSet {
 
   const sourceProductIds = stringArray(form.get("sourceProductIds"),500);
   const pinnedIds = stringArray(form.get("pinnedIds"),500);
-  const sourceRules = parseRules(form.get("sourceRules"));
-  const targetRules = parseRules(form.get("targetRules"));
+  const sourceRules = parseGroups(form.get("sourceRules"));
+  const targetRules = parseGroups(form.get("targetRules"));
+  const excludeRules = parseGroups(form.get("excludeRules"));
   const sourceLogic = logical(form.get("sourceLogic"));
   const targetLogic = logical(form.get("targetLogic"));
-  const count = (sourceMatch === "rules" ? sourceRules.length : 0) + targetRules.length;
+  const excludeLogic = logical(form.get("excludeLogic"));
+  const excludedProductIds = stringArray(form.get("excludedProductIds"), 500);
+  const fallbackMode = text(form.get("fallbackMode"), 8);
+  if (fallbackMode !== "next" && fallbackMode !== "stop") {
+    return bad("Choose what happens when a set has no eligible products.");
+  }
+  const count = (sourceMatch === "rules" ? countRuleConditions(sourceRules) : 0)
+    + countRuleConditions(targetRules) + countRuleConditions(excludeRules);
   if (!canUseRules(plan,count)) {
     return bad("Your current plan allows fewer matching conditions in each rule set.");
   }
   if (enabled && sourceMatch === "products" && !sourceProductIds.length) return bad("Select at least one trigger product.");
-  if (enabled && sourceMatch === "rules" && !sourceRules.length) return bad("Add a trigger condition.");
+  if (enabled && sourceMatch === "rules" && !countRuleConditions(sourceRules)) return bad("Add a trigger condition.");
   if (enabled && selectionMode === "manual" && !pinnedIds.length) return bad("Select at least one product to recommend.");
   const tags = text(form.get("excludeTags"),400).split(",").map(v=>v.trim().toLowerCase()).filter(Boolean).slice(0,30);
   const parsedPriority = Number(form.get("priority"));
@@ -102,13 +150,14 @@ export function parseRuleSet(form: FormData, plan: string): ValidatedRuleSet {
     sourceProductIds: sourceMatch === "products" ? sourceProductIds : [],
     sourceRules: sourceMatch === "rules" ? sourceRules : [],
     sourceLogic, selectionMode, pinnedIds, targetRules, targetLogic, excludeTags: tags,
-    maxItems,
+    excludedProductIds, excludeRules, excludeLogic,
+    fallbackMode, maxItems,
   };
 }
 
 type DbTransaction = Prisma.TransactionClient;
 async function ensureSelectedProducts(tx: DbTransaction, shopDomain: string, ruleSet: ValidatedRuleSet) {
-  const ids = [...new Set([...ruleSet.sourceProductIds,...ruleSet.pinnedIds])];
+  const ids = [...new Set([...ruleSet.sourceProductIds,...ruleSet.pinnedIds,...ruleSet.excludedProductIds])];
   if (!ids.length) return;
   const count = await tx.productSnapshot.count({
     where: {shopDomain, productId: {in:ids}},
@@ -162,7 +211,11 @@ export async function duplicateRuleSet(shopDomain: string, setId: string) {
         sourceRules: existing.sourceRules as Prisma.InputJsonValue, sourceLogic: existing.sourceLogic,
         selectionMode: existing.selectionMode, pinnedIds: existing.pinnedIds as Prisma.InputJsonValue,
         targetRules: existing.targetRules as Prisma.InputJsonValue, targetLogic: existing.targetLogic,
-        excludeTags: existing.excludeTags as Prisma.InputJsonValue, maxItems: existing.maxItems
+        excludeTags: existing.excludeTags as Prisma.InputJsonValue,
+        excludedProductIds: existing.excludedProductIds as Prisma.InputJsonValue,
+        excludeRules: existing.excludeRules as Prisma.InputJsonValue,
+        excludeLogic: existing.excludeLogic, fallbackMode: existing.fallbackMode,
+        maxItems: existing.maxItems
       }
     });
   }, { isolationLevel: "Serializable" });
