@@ -3,7 +3,15 @@ import { Form, useActionData, useLoaderData } from "react-router";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { ensureShop } from "../services/catalogue.server";
-import { BLOCK_KINDS, BLOCK_TITLES, type BlockKind } from "../services/recommendations.server";
+// Public block metadata is safe in the browser; do not import .server modules into rendered components.
+const BLOCK_KINDS = ["similar", "complement", "bought_together", "bundle"] as const;
+type BlockKind = (typeof BLOCK_KINDS)[number];
+const BLOCK_TITLES: Record<BlockKind, string> = {
+  similar: "Similar products",
+  complement: "Pairs perfectly with",
+  bought_together: "Frequently bought together",
+  bundle: "Complete the set",
+};
 
 const MODE_OPTIONS = ["ai", "manual", "hybrid"] as const;
 const FIELD_OPTIONS = ["tags", "title", "category", "product_type", "vendor", "collections", "price"] as const;
