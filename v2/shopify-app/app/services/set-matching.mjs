@@ -5,10 +5,14 @@
  */
 export function sortRuleSets(sets) {
   const specificity = set => ({products: 3, rules: 2, all: 1})[set.sourceMatch] || 0;
+  const time = set => {
+    const timestamp = new Date(set.createdAt || 0).getTime();
+    return Number.isFinite(timestamp) ? timestamp : 0;
+  };
   return [...sets].sort((a,b) =>
     (a.priority - b.priority)
     || (specificity(b) - specificity(a))
-    || String(a.createdAt || '').localeCompare(String(b.createdAt || ''))
+    || (time(a) - time(b))
     || String(a.id).localeCompare(String(b.id))
   );
 }
