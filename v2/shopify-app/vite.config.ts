@@ -36,6 +36,8 @@ if (host === "localhost") {
 }
 
 export default defineConfig({
+  // Prevent Vite from loading the old SmartStack Tailwind PostCSS config in the parent folder.
+  css: { postcss: { plugins: [] } },
   server: {
     allowedHosts: [host],
     cors: {
