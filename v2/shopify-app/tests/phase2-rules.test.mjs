@@ -148,3 +148,16 @@ test("AND group targeting never matches a non-matching source",()=>{
   assert.equal(result.selection,null);
   assert.equal(result.trace[0].decision,"source_mismatch");
 });
+
+
+test("same-priority, same-specificity sets are resolved by creation date then ID",()=>{
+  const items=[
+    {...sets[0],id:"later",createdAt:new Date("2026-09-20T10:00:00Z")},
+    {...sets[0],id:"earlier",createdAt:new Date("2026-01-04T10:00:00Z")},
+    {...sets[0],id:"same-id-b",createdAt:new Date("2026-06-10T00:00:00Z")},
+    {...sets[0],id:"same-id-a",createdAt:new Date("2026-06-10T00:00:00Z")}
+  ];
+  assert.deepEqual(sortRuleSets(items).map(item=>item.id),[
+    "earlier","same-id-a","same-id-b","later"
+  ]);
+});
