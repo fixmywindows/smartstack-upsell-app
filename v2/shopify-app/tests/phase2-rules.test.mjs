@@ -161,3 +161,16 @@ test("same-priority, same-specificity sets are resolved by creation date then ID
     "earlier","same-id-a","same-id-b","later"
   ]);
 });
+
+
+test("an empty draft preview explains preview isolation without overriding saved fallback",()=>{
+  const draft={...sets[1],enabled:false,id:"draft-empty",fallbackMode:"next"};
+  const result=resolveRuleSets({
+    sets:[...sets,draft],source,sourceId:"source",previewSetId:"draft-empty",
+    evaluateGroups,normaliseGroups:groups,recommendForSet:()=>({items:[]})
+  });
+  assert.equal(result.selection.set.id,"draft-empty");
+  const message=result.trace.find(row=>row.id==="draft-empty").reason;
+  assert.match(message,/Selected preview has no eligible/);
+  assert.doesNotMatch(message,/configured to stop/);
+});
