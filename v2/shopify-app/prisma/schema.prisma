@@ -36,6 +36,8 @@ model MerchantShop {
   createdAt       DateTime @default(now())
   products        ProductSnapshot[]
   blocks          RecommendationBlock[]
+  ruleSets        RecommendationRuleSet[]
+  plan            String   @default("free")
 }
 
 model ProductSnapshot {
@@ -80,4 +82,34 @@ model RecommendationBlock {
   shop            MerchantShop @relation(fields: [shopDomain], references: [domain], onDelete: Cascade)
   @@unique([shopDomain, kind])
   @@index([shopDomain, enabled])
+}
+
+ 
+// Independent rule sets within each recommendation block type.
+// Existing RecommendationBlock records remain in place as migration fallbacks.
+model RecommendationRuleSet {
+  id               String       @id @default(cuid())
+  shopDomain       String
+  shop             MerchantShop @relation(fields: [shopDomain], references: [domain], onDelete: Cascade)
+  legacyBlockId    String?      @unique
+  kind             String
+  name             String
+  heading          String
+  enabled          Boolean      @default(false)
+  priority         Int          @default(50)
+  sourceMatch      String       @default("all") // all, products, rules
+  sourceProductIds Json         @default("[]")
+  sourceRules      Json         @default("[]")
+  sourceLogic      String       @default("AND")
+  selectionMode    String       @default("hybrid") // ai (heuristic), manual, hybrid
+  pinnedIds        Json         @default("[]")
+  targetRules      Json         @default("[]")
+  targetLogic      String       @default("AND")
+  excludeTags      Json         @default("[]")
+  maxItems         Int          @default(3)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([shopDomain, kind, enabled, priority])
+  @@index([shopDomain, kind, priority])
 }
