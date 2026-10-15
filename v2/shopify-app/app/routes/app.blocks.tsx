@@ -61,13 +61,13 @@ const cardStyle: React.CSSProperties = { border: "1px solid #e2e5e9", borderRadi
 
 export default function Blocks() {
   const { blocks, products } = useLoaderData<typeof loader>();
-  const saved = useActionData<typeof action>();
+  const saved = useActionData<{saved?: string;enabled?: boolean;error?: string}>();
   const lookup = (kind: string) => blocks.find((b) => b.kind === kind);
   return <s-page heading="Recommendation blocks">
     <s-section heading="Configure all four types">
       <p style={{ maxWidth: 700 }}>All blocks can use automatic (catalogue heuristics), manual selections, or hybrid. Manual selections override automatic rankings, while availability and hard exclusions always apply.</p>
-      {saved && "saved" in saved && <p role="status" style={{ color: "#17694a" }}>Saved {saved.saved}. {saved.enabled ? "Block enabled." : "Block is disabled."}</p>}
-      {saved && "error" in saved && <p role="alert" style={{ color: "#b42318" }}>{saved.error}</p>}
+      {saved?.saved && <p role="status" style={{ color: "#17694a" }}>Saved {saved.saved}. {saved.enabled ? "Block enabled." : "Block is disabled."}</p>}
+      {saved?.error && <p role="alert" style={{ color: "#b42318" }}>{saved.error}</p>}
       {BLOCK_KINDS.map((kind) => {
         const b = lookup(kind);
         const rules = Array.isArray(b?.ruleGroups) ? b.ruleGroups as Array<{ rules?: Array<{ field?: string; op?: string; value?: string }> }> : [];

@@ -27,7 +27,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
 export default function Catalogue() {
   const data = useLoaderData<typeof loader>();
-  const fetcher = useFetcher<typeof action>();
+  const fetcher = useFetcher<{ error?: string; addedOrUpdated?: number; hasMore?: boolean }>();
   const pending = fetcher.state !== "idle";
   return <s-page heading="Product catalogue">
     <s-section heading="Shopify catalogue connection">
@@ -38,8 +38,8 @@ export default function Catalogue() {
           {pending ? "Syncing…" : data.finished ? "Refresh catalogue" : "Sync next 25 products"}
         </button>
       </fetcher.Form>
-      {fetcher.data && "error" in fetcher.data && <p role="alert" style={{ color: "#b42318" }}>{fetcher.data.error}</p>}
-      {fetcher.data && "addedOrUpdated" in fetcher.data && <p role="status">Updated {fetcher.data.addedOrUpdated} products. {fetcher.data.hasMore ? "More products remain." : "Scan complete."}</p>}
+      {fetcher.data?.error && <p role="alert" style={{ color: "#b42318" }}>{fetcher.data.error}</p>}
+      {typeof fetcher.data?.addedOrUpdated === "number" && <p role="status">Updated {fetcher.data.addedOrUpdated} products. {fetcher.data.hasMore ? "More products remain." : "Scan complete."}</p>}
     </s-section>
     <s-section heading="Product preview">
       {data.products.length === 0 ? <p>No catalogue data yet. Click Sync above.</p> :

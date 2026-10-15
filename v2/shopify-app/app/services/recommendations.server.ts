@@ -48,7 +48,7 @@ export async function getRecommendations(shopDomain: string, sourceId: string, k
     heading: results.heading,
     basis: results.basis,
     warning: results.warning,
-    items: results.items.map(({ product: p }: { product: typeof products[number] }) => ({
+    items: (results.items as Array<{product: typeof products[number]}>).map(({ product: p }) => ({
       id: p.id, title: p.title,
       url: "/products/" + encodeURIComponent(p.handle),
       imageUrl: p.imageUrl,

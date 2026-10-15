@@ -1,4 +1,5 @@
 import db from "../db.server";
+import type { Prisma } from "@prisma/client";
 
 type ProductNode = {
   id: string; title: string; handle: string; productType: string; vendor: string;
@@ -69,7 +70,7 @@ export async function syncCataloguePage(admin: GraphqlAdmin, domain: string) {
         vendor: product.vendor,
         tags: product.tags,
         collections: product.collections.nodes.map((c) => c.handle),
-        metafields: meta,
+        metafields: meta as Prisma.InputJsonObject,
         variantId: variant?.id || null,
         imageUrl: product.featuredMedia?.preview?.image?.url || null,
         priceMinor: minor(variant?.price || product.priceRangeV2.minVariantPrice.amount),
