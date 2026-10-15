@@ -43,7 +43,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     try {
       // This import must remain inside the server-only loader, never in the UI.
       const { getRecommendations } = await import("../services/recommendations.server");
-      result = await getRecommendations(session.shop, sourceId, kind, currentBlock.maxItems);
+      result = await getRecommendations(session.shop, sourceId, kind, currentBlock?.maxItems ?? 12);
     } catch (cause) {
       console.error("SmartStack merchant preview", cause);
       error = "Couldn't load recommendations. Please try again.";
