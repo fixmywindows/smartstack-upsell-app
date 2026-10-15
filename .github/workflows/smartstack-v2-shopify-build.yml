@@ -107,7 +107,7 @@ jobs:
             IF (SELECT COUNT(*) FROM "RecommendationBlock" WHERE id='legacy-test') <> 1 THEN
               RAISE EXCEPTION 'Legacy block was changed';
             END IF;
-          END $;
+          END $$;
           SQL
       - name: Validate Phase 2 additive migration
         working-directory: v2/shopify-app
@@ -115,7 +115,7 @@ jobs:
           PGPASSWORD: test
         run: |
           psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U test -d smartstack_test <<'SQL'
-          DO $
+          DO $$
           DECLARE
             r record;
           BEGIN
@@ -129,5 +129,5 @@ jobs:
             IF r."pinnedIds" <> '["gid://shopify/Product/12"]'::jsonb THEN
               RAISE EXCEPTION 'Merchant pins were altered';
             END IF;
-          END $;
+          END $$;
           SQL
