@@ -67,15 +67,19 @@ export function evaluateRule(product, rule) {
   }
 }
 
-export function evaluateGroups(product, groups=[]) {
-  // Groups are combined with AND, each group specifies AND or OR among rules.
-  return groups.every(group=>{
-    const rules = (group.rules ?? []).filter(r => r.field && r.op);
-    if (!rules.length) return true;
+export function evaluateGroups(product, groups=[], outerLogic='AND') {
+  // No filter configured: all products are eligible. An explicitly empty group
+  // is not a wildcard: it must never accidentally match every product.
+  if (!Array.isArray(groups) || groups.length === 0) return true;
+  const matches = groups.map(group => {
+    const rules = Array.isArray(group?.rules)
+      ? group.rules.filter(r => r?.field && r?.op) : [];
+    if (rules.length === 0) return false;
     return group.logic === 'OR'
-      ? rules.some(r=>evaluateRule(product,r))
-      : rules.every(r=>evaluateRule(product,r));
+      ? rules.some(r => evaluateRule(product,r))
+      : rules.every(r => evaluateRule(product,r));
   });
+  return outerLogic === 'OR' ? matches.some(Boolean) : matches.every(Boolean);
 }
 
 function isCompatible(source, candidate) {
@@ -95,7 +99,9 @@ function eligible(source, candidate, config) {
   if ((config.excludeTags ?? []).some(t=>(candidate.tags??[]).some(ct=>compare(t,ct)))) return false;
   if (config.minPriceCents != null && candidate.priceCents < config.minPriceCents) return false;
   if (config.maxPriceCents != null && candidate.priceCents > config.maxPriceCents) return false;
-  if (!evaluateGroups(candidate, config.ruleGroups ?? [])) return false;
+  if (!evaluateGroups(candidate, config.ruleGroups ?? [], config.ruleOuterLogic ?? 'AND')) return false;
+  if (Array.isArray(config.excludeGroups) && config.excludeGroups.length > 0
+      && evaluateGroups(candidate, config.excludeGroups, config.excludeOuterLogic ?? 'OR')) return false;
   if (!isCompatible(source,candidate)) return false;
   return true;
 }
