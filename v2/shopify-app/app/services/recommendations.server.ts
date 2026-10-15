@@ -72,7 +72,7 @@ export async function getRecommendations(shopDomain: string, sourceId: string, k
     // The first enabled, matching rule set wins. A fallback "All products" set
     // at priority 100 ensures existing merchants keep their previous behaviour.
     for (const set of sets) {
-      if (!set.enabled) continue;
+      if (set.archived || !set.enabled) continue;
       let applies = false;
       if (set.sourceMatch === "all") applies = true;
       if (set.sourceMatch === "products") applies = textArray(set.sourceProductIds).includes(sourceId);

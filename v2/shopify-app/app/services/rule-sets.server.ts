@@ -127,12 +127,13 @@ export async function saveRuleSet(shopDomain: string, form: FormData) {
       const existing = await tx.recommendationRuleSet.findFirst({where:{id,shopDomain}});
       if (!existing) return bad("Rule set not found.");
       if (existing.kind !== parsed.kind) return bad("A rule set can't change block types.");
+      if (existing.archived) return bad("Restore this rule set before editing it.");
       return tx.recommendationRuleSet.update({
         where: {id:existing.id},
         data: parsed,
       });
     }
-    const count = await tx.recommendationRuleSet.count({where:{shopDomain,kind:parsed.kind}});
+    const count = await tx.recommendationRuleSet.count({where:{shopDomain,kind:parsed.kind,archived:false}});
     if (!canCreateSet(plan,count)) {
       return bad("You've reached the " + plan + " plan's limit for this block type.");
     }
@@ -140,10 +141,75 @@ export async function saveRuleSet(shopDomain: string, form: FormData) {
   },{isolationLevel:"Serializable"});
 }
 
+export async function duplicateRuleSet(shopDomain: string, setId: string) {
+  const plan = validPlan((await db.merchantShop.findUniqueOrThrow({
+    where: { domain: shopDomain }, select: { plan: true }
+  })).plan);
+  return db.$transaction(async (tx) => {
+    const existing = await tx.recommendationRuleSet.findFirst({
+      where: { id: setId, shopDomain, archived: false }
+    });
+    if (!existing) return bad("Rule set not found.");
+    const count = await tx.recommendationRuleSet.count({
+      where: { shopDomain, kind: existing.kind, archived: false }
+    });
+    if (!canCreateSet(plan, count)) return bad("You've reached your plan's set limit for this block type.");
+    return tx.recommendationRuleSet.create({
+      data: {
+        shopDomain, kind: existing.kind, name: (existing.name.slice(0,72) + " (copy)").slice(0,80),
+        heading: existing.heading, enabled: false, priority: Math.min(100, existing.priority + 1),
+        sourceMatch: existing.sourceMatch, sourceProductIds: existing.sourceProductIds as Prisma.InputJsonValue,
+        sourceRules: existing.sourceRules as Prisma.InputJsonValue, sourceLogic: existing.sourceLogic,
+        selectionMode: existing.selectionMode, pinnedIds: existing.pinnedIds as Prisma.InputJsonValue,
+        targetRules: existing.targetRules as Prisma.InputJsonValue, targetLogic: existing.targetLogic,
+        excludeTags: existing.excludeTags as Prisma.InputJsonValue, maxItems: existing.maxItems
+      }
+    });
+  }, { isolationLevel: "Serializable" });
+}
+export async function archiveRuleSet(shopDomain: string, setId: string) {
+  const existing = await db.recommendationRuleSet.findFirst({
+    where: { id: setId, shopDomain, archived: false }
+  });
+  if (!existing) return bad("Rule set not found.");
+  return db.recommendationRuleSet.update({
+    where: { id: existing.id }, data: { archived: true, enabled: false }
+  });
+}
+export async function restoreRuleSet(shopDomain: string, setId: string) {
+  const plan = validPlan((await db.merchantShop.findUniqueOrThrow({
+    where: { domain: shopDomain }, select: { plan: true }
+  })).plan);
+  return db.$transaction(async (tx) => {
+    const existing = await tx.recommendationRuleSet.findFirst({
+      where: { id: setId, shopDomain, archived: true }
+    });
+    if (!existing) return bad("Archived rule set not found.");
+    const count = await tx.recommendationRuleSet.count({
+      where: { shopDomain, kind: existing.kind, archived: false }
+    });
+    if (!canCreateSet(plan, count)) return bad("You've reached your plan's limit. Archive another set first.");
+    return tx.recommendationRuleSet.update({
+      where: { id: existing.id }, data: { archived: false, enabled: false }
+    });
+  }, { isolationLevel: "Serializable" });
+}
+
 export async function changeSetStatus(shopDomain:string,setId:string,enabled:boolean) {
   const record = await db.recommendationRuleSet.findFirst({where:{id:setId,shopDomain}});
-  if (!record) return bad("Rule set not found.");
-  if (enabled && record.sourceMatch === "products" && !Array.isArray(record.sourceProductIds)) return bad("Finish the rule set first.");
+  if (!record || record.archived) return bad("Rule set not found.");
+  if (enabled && record.sourceMatch === "products" &&
+    (!Array.isArray(record.sourceProductIds) || record.sourceProductIds.length === 0)) {
+    return bad("Choose at least one trigger product before activating this set.");
+  }
+  if (enabled && record.sourceMatch === "rules" &&
+    (!Array.isArray(record.sourceRules) || record.sourceRules.length === 0)) {
+    return bad("Add a trigger condition before activating this set.");
+  }
+  if (enabled && record.selectionMode === "manual" &&
+    (!Array.isArray(record.pinnedIds) || record.pinnedIds.length === 0)) {
+    return bad("Select at least one recommendation before activating this set.");
+  }
   return db.recommendationRuleSet.update({where:{id:record.id},data:{enabled}});
 }
 export async function deleteRuleSet(shopDomain:string,setId:string) {
