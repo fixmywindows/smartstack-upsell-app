@@ -7,11 +7,16 @@ import { ensureShop, syncCataloguePage } from "../services/catalogue.server";
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shop = await ensureShop(session.shop);
+  const [variantCount,incomplete] = await Promise.all([
+    db.productVariantSnapshot.count({where:{shopDomain:session.shop}}),
+    db.productSnapshot.count({where:{shopDomain:session.shop,variantsComplete:false}})
+  ]);
   const products = await db.productSnapshot.findMany({
     where: { shopDomain: session.shop }, orderBy: { title: "asc" }, take: 30,
     select: { productId: true, title: true, category: true, priceMinor: true, currencyCode: true, published: true, available: true },
   });
-  return { count: shop.productCount, finished: shop.syncFinished, products };
+  return { count: shop.productCount, finished: shop.syncFinished, products,
+    variantCount,incomplete };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -33,6 +38,12 @@ export default function Catalogue() {
     <s-section heading="Shopify catalogue connection">
       <p>Synced: <strong>{data.count} products</strong>. {data.finished ? "The last scan is complete; start again to refresh." : "More pages may be available."}</p>
       <p>To avoid long-running server requests, each sync imports up to 25 products. Continue until Shopify reports the catalogue is complete.</p>
+      <p style={{color:"#5c6070",fontSize:13}}>
+        Available variant records: <strong>{data.variantCount}</strong>. Products with
+        more than 15 variants: <strong>{data.incomplete}</strong>. For those products
+        SmartStack requires shoppers to select options on the product page,
+        rather than guessing a variant during quick-add.
+      </p>
       <fetcher.Form method="post">
         <button type="submit" disabled={pending} style={{ background: "#222", color: "#fff", border: 0, borderRadius: 8, padding: "12px 18px", cursor: "pointer" }}>
           {pending ? "Syncing…" : data.finished ? "Refresh catalogue" : "Sync next 25 products"}
