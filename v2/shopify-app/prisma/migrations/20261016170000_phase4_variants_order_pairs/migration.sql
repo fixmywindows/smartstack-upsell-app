@@ -1,3 +1,6 @@
+ALTER TABLE "RecommendationRuleSet"
+  ADD COLUMN "bundleDiscountPercent" INTEGER NOT NULL DEFAULT 0;
+
 ALTER TABLE "ProductSnapshot" ADD COLUMN "variantsComplete" BOOLEAN NOT NULL DEFAULT TRUE;
 
 -- Phase 4 additive. No customer PII, carts, payments, sessions or legacy rules touched.
