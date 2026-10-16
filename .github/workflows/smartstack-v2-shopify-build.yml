@@ -49,7 +49,7 @@ jobs:
         run: npx prisma validate
       - name: Test theme, rules and Design Studio
         working-directory: v2/shopify-app
-        run: node --test tests/widget.test.mjs tests/phase2-rules.test.mjs tests/design.test.mjs tests/inline-aggregation.test.mjs tests/inline-admin.test.mjs
+        run: node --test tests/widget.test.mjs tests/phase2-rules.test.mjs tests/design.test.mjs tests/inline-aggregation.test.mjs tests/inline-admin.test.mjs tests/attribute-pickers.test.mjs
       - name: Typecheck app
         working-directory: v2/shopify-app
         run: npm run typecheck
@@ -161,4 +161,78 @@ jobs:
           VALUES ('design-test','test-shop.myshopify.com','similar',
             '{"preset":"theme","showQuickAdd":false}'::jsonb,CURRENT_TIMESTAMP);
           SELECT "kind" FROM "RecommendationDesign" WHERE "id"='design-test';
+          SQL
+
+      - name: Verify searchable attribute values on Postgres
+        working-directory: v2/shopify-app
+        env:
+          PGPASSWORD: test
+        run: |
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U test -d smartstack_test <<'SQL'
+          INSERT INTO "MerchantShop" ("domain","updatedAt")
+            VALUES ('other-shop.myshopify.com', CURRENT_TIMESTAMP);
+          INSERT INTO "ProductSnapshot"
+            ("shopDomain","productId","title","handle","tags","collections",
+              "metafields","category","productType","vendor","updatedAt")
+          VALUES
+            ('test-shop.myshopify.com','gid://shopify/Product/111',
+              'Alpine Snowboard','alpine-snowboard',
+              '["winter","adventure"]'::jsonb,
+              '["winter-sports","clearance"]'::jsonb,
+              '{"custom.level":"advanced","custom.accessories":["helmet","boots"],"custom.rating":4}'::jsonb,
+              'Snowboards','Boards','Test Vendor',CURRENT_TIMESTAMP),
+            ('test-shop.myshopify.com','gid://shopify/Product/112',
+              'Budget Snowboard','budget-snowboard',
+              '["winter","budget"]'::jsonb,
+              '["winter-sports"]'::jsonb,
+              '{"custom.level":"beginner","custom.accessories":["boots"],"custom.rating":2}'::jsonb,
+              'Snowboards','Boards','Test Vendor',CURRENT_TIMESTAMP),
+            ('other-shop.myshopify.com','gid://shopify/Product/113',
+              'Unrelated confidential product','unrelated',
+              '["other-shop-secret"]'::jsonb,
+              '["private-only"]'::jsonb,
+              '{"custom.level":"private"}'::jsonb,
+              'Unrelated','Other','Different Vendor',CURRENT_TIMESTAMP);
+          DO $$
+          BEGIN
+            IF NOT EXISTS (
+              SELECT 1 FROM "ProductSnapshot" p
+              CROSS JOIN LATERAL jsonb_array_elements_text(
+                CASE WHEN jsonb_typeof(p."tags")='array' THEN p."tags" ELSE '[]'::jsonb END
+              ) AS v(value)
+              WHERE p."shopDomain"='test-shop.myshopify.com' AND v.value='winter'
+            ) THEN RAISE EXCEPTION 'Synced tag choice missing'; END IF;
+            IF NOT EXISTS (
+              SELECT 1 FROM "ProductSnapshot" p
+              CROSS JOIN LATERAL jsonb_array_elements_text(
+                CASE WHEN jsonb_typeof(p."collections")='array' THEN p."collections" ELSE '[]'::jsonb END
+              ) AS v(value)
+              WHERE p."shopDomain"='test-shop.myshopify.com' AND v.value='winter-sports'
+            ) THEN RAISE EXCEPTION 'Collection handle missing'; END IF;
+            IF NOT EXISTS (
+              SELECT 1 FROM "ProductSnapshot" p
+              CROSS JOIN LATERAL jsonb_each(
+                CASE WHEN jsonb_typeof(p."metafields")='object' THEN p."metafields" ELSE '{}'::jsonb END
+              ) AS m(key,val)
+              WHERE p."shopDomain"='test-shop.myshopify.com' AND m.key='custom.level'
+            ) THEN RAISE EXCEPTION 'Metafield key missing'; END IF;
+            IF NOT EXISTS (
+              SELECT 1 FROM "ProductSnapshot" p
+              CROSS JOIN LATERAL jsonb_array_elements_text(
+                CASE WHEN jsonb_typeof(p."metafields" -> 'custom.accessories')='array'
+                  THEN p."metafields" -> 'custom.accessories'
+                  WHEN jsonb_typeof(p."metafields" -> 'custom.accessories') IN ('string','number','boolean')
+                  THEN jsonb_build_array(p."metafields" -> 'custom.accessories')
+                  ELSE '[]'::jsonb END
+              ) AS choice(value)
+              WHERE p."shopDomain"='test-shop.myshopify.com' AND choice.value='helmet'
+            ) THEN RAISE EXCEPTION 'List metafield value missing'; END IF;
+            IF EXISTS (
+              SELECT 1 FROM "ProductSnapshot" p
+              CROSS JOIN LATERAL jsonb_array_elements_text(
+                CASE WHEN jsonb_typeof(p."tags")='array' THEN p."tags" ELSE '[]'::jsonb END
+              ) AS v(value)
+              WHERE p."shopDomain"='test-shop.myshopify.com' AND v.value='other-shop-secret'
+            ) THEN RAISE EXCEPTION 'Cross-tenant tag leaked'; END IF;
+          END $$;
           SQL

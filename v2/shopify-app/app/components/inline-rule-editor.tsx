@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Link, useFetcher } from "react-router";
 import { groupsForEditor, countRuleConditions, type MatchGroup, type MatchRule } from "../utils/rule-groups";
 
@@ -34,12 +34,62 @@ function Toggle({options,value,onChange,label}:{
   </div>;
 }
 
+type ChoiceKind="tags"|"collections"|"metafields"|"values"|"category"|"vendor"|"product_type";
+type Choice={value:string;label:string;count:number};
+/** Searchable native select with a deliberate manual-entry escape hatch. */
+export function CatalogueChoice({kind,value,onChange,label,metafieldKey="",fallback=[]}:{
+  kind:ChoiceKind;value:string;onChange:(next:string)=>void;label:string;
+  metafieldKey?:string;fallback?:string[];
+}){
+  const searcher=useFetcher<{options?:Choice[];error?:string}>();
+  const [query,setQuery]=useState("");
+  const [custom,setCustom]=useState(false);
+  useEffect(()=>{
+    if(kind==="values"&&!metafieldKey)return;
+    const url="/app/api/attributes?kind="+encodeURIComponent(kind)+
+      "&q="+encodeURIComponent(query)+"&key="+encodeURIComponent(metafieldKey);
+    const timer=setTimeout(()=>searcher.load(url),query?230:0);
+    return ()=>clearTimeout(timer);
+  },[kind,metafieldKey,query]); // fetcher.load remains stable in React Router
+
+  const server=searcher.data?.options;
+  const choices=server??fallback.filter(x=>x.toLowerCase().includes(query.toLowerCase()))
+    .slice(0,65).map(x=>({value:x,label:x,count:0}));
+  const missing=value&&!choices.some(choice=>choice.value===value);
+  return <div className="ssr-attribute-picker">
+    {!custom&&<>
+      <input className="ssr-input ssr-attribute-search" type="search"
+        aria-label={"Filter "+label} placeholder={"Search "+label+"…"}
+        value={query} onChange={e=>setQuery(e.target.value)}/>
+      <select className="ssr-select" aria-label={"Select "+label}
+        disabled={kind==="values"&&!metafieldKey}
+        value={value} onChange={e=>onChange(e.target.value)}>
+        <option value="">{kind==="values"&&!metafieldKey?"Choose metafield first":
+          searcher.state!=="idle"?"Loading choices…":"Choose "+label}</option>
+        {missing&&<option value={value}>{value} (saved/custom)</option>}
+        {choices.map(choice=><option key={choice.value} value={choice.value}>
+          {choice.label}{choice.count>0?" · "+choice.count:""}
+        </option>)}
+      </select>
+    </>}
+    {custom&&<input className="ssr-input" type="text" maxLength={160} value={value}
+      aria-label={"Custom "+label} placeholder={"Enter "+label}
+      onChange={e=>onChange(e.target.value)}/>}
+    <button className="ssr-attribute-switch" type="button" onClick={()=>setCustom(!custom)}>
+      {custom?"← Choose from synced catalogue":"Enter a custom value"}
+    </button>
+    {searcher.data?.error&&<span className="ssr-caption">
+      Catalogue choices temporarily unavailable. You can enter a custom value.
+    </span>}
+  </div>;
+}
+
 function ConditionGroups({groups,onChange,outer,setOuter,metafields,categories,remaining,side}:{
   groups:MatchGroup[];onChange:(next:MatchGroup[])=>void;
   outer:string;setOuter:(value:string)=>void;metafields:string[];categories:string[];
   remaining:number|null;side:"if"|"then"
 }) {
-  const attributeOptions=[...OPTIONS,...metafields.map(key=>["metafield:"+key,"Metafield: "+key] as const)];
+  const attributeOptions=[...OPTIONS,["metafield","Metafield"] as const];
   const updateGroup=(gi:number,patch:MatchGroup)=>onChange(groups.map((g,i)=>i===gi?patch:g));
   const updateRule=(gi:number,ri:number,patch:Partial<MatchRule>)=>{
     const group=groups[gi];
@@ -72,10 +122,16 @@ function ConditionGroups({groups,onChange,outer,setOuter,metafields,categories,r
         </div>
       </div>
       {group.rules.map((r,ri)=><div className="ssr-condition" key={ri}>
-        <select className="ssr-select" value={r.field} aria-label={"Condition attribute "+(ri+1)}
-          onChange={e=>updateRule(gi,ri,{field:e.target.value,op:"contains",value:""})}>
+        <select className="ssr-select" value={r.field.startsWith("metafield:")?"metafield":r.field}
+          aria-label={"Condition attribute "+(ri+1)}
+          onChange={e=>updateRule(gi,ri,{field:e.target.value==="metafield"?"metafield:":e.target.value,
+            op:"contains",value:""})}>
           {attributeOptions.map(([value,name])=><option key={value} value={value}>{name}</option>)}
         </select>
+        {r.field.startsWith("metafield:")&&
+          <CatalogueChoice key={"key-"+gi+"-"+ri} kind="metafields"
+            label="metafield key" value={r.field.slice(10)} fallback={metafields}
+            onChange={key=>updateRule(gi,ri,{field:"metafield:"+key,value:""})}/>}
         <select className="ssr-select" value={r.op} aria-label={"Condition operator "+(ri+1)}
           onChange={e=>updateRule(gi,ri,{op:e.target.value})}>
           {OPS.filter(([op])=>!["gte","lte"].includes(op)||r.field==="price"||
@@ -91,19 +147,25 @@ function ConditionGroups({groups,onChange,outer,setOuter,metafields,categories,r
             <option value="true">In stock</option>
             <option value="false">Out of stock</option>
           </select>:
-        r.field==="category"?
-          <select aria-label={"Category "+(ri+1)} className="ssr-select" value={String(r.value)}
-            onChange={e=>updateRule(gi,ri,{value:e.target.value})}>
-            <option value="">Select category</option>
-            {categories.map(c=><option key={c} value={c}>{c}</option>)}
-            {r.value&&!categories.includes(String(r.value))&&
-              <option value={String(r.value)}>{String(r.value)}</option>}
-          </select>:
-          <input className="ssr-input" aria-label={"Condition value "+(ri+1)}
+        r.field==="price"||r.field.startsWith("metafield:")&&["gte","lte"].includes(r.op)?
+          <input className="ssr-input" aria-label={"Numeric condition "+(ri+1)}
             type={r.field==="price"?"number":"text"} min={r.field==="price"?"0":undefined}
             step={r.field==="price"?"0.01":undefined} value={String(r.value)}
             onChange={e=>updateRule(gi,ri,{value:e.target.value})}
-            placeholder={r.field.startsWith("metafield:")?"Metafield value":"Enter value"}/>}
+            placeholder={r.field==="price"?"Price in store currency":"Numeric metafield value"}/>:
+        (["tags","collections","category","vendor","product_type"].includes(r.field)||
+          r.field.startsWith("metafield:"))?
+          <CatalogueChoice key={r.field} kind={r.field.startsWith("metafield:")?"values":
+            r.field as ChoiceKind}
+            metafieldKey={r.field.startsWith("metafield:")?r.field.slice(10):""}
+            fallback={r.field==="category"?categories:[]}
+            label={r.field.startsWith("metafield:")?"metafield value":r.field==="collections"?
+              "collection":r.field==="tags"?"tag":r.field.replace("_"," ")}
+            value={String(r.value)} onChange={value=>updateRule(gi,ri,{value})}/>:
+          <input className="ssr-input" aria-label={"Condition value "+(ri+1)}
+            type="text" value={String(r.value)} maxLength={160}
+            onChange={e=>updateRule(gi,ri,{value:e.target.value})}
+            placeholder="Enter text or fragment"/>}
         <button type="button" className="ssr-btn ssr-btn-minimal ssr-btn-danger"
           onClick={()=>removeRule(gi,ri)}>×</button>
       </div>)}
