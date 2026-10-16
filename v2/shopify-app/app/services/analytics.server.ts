@@ -51,7 +51,7 @@ export async function analyticsReport(shopDomain:string,scope:string|null|undefi
     purchaseToViewRatio:percent(cards.reduce((n,x)=>n+x.purchaseLines,0),types.view||0),
     currencies:cards,
   };
-  if(!paid)return {plan,orderConnected,days,selectedKind,summary,advanced:null};
+  if(!paid)return {plan,paid:false,orderConnected,days,selectedKind,summary,advanced:null};
   // Aggregate by day inside PostgreSQL (not by downloading individual events).
   const [dailyEvents,dailySales,topSold,views,clicks,bundleSales,pairs]=await Promise.all([
     db.$queryRaw<Array<{day:Date;type:string;count:bigint}>>(Prisma.sql`
@@ -155,7 +155,7 @@ export async function analyticsReport(shopDomain:string,scope:string|null|undefi
   }
   const ranked=(data:Map<string,number>)=>[...data].sort((a,b)=>b[1]-a[1])
     .slice(0,10).map(([name,count])=>({name,count}));
-  return {plan,orderConnected,days,selectedKind,summary,advanced:{
+  return {plan,paid:true,orderConnected,days,selectedKind,summary,advanced:{
     daily:[...byDay.values()].sort((a,b)=>a.date.localeCompare(b.date)),
     selectedCurrency,currencies:cards.map(x=>x.currencyCode),
     topProducts,underperformers,
