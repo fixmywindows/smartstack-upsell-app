@@ -163,6 +163,7 @@ model RecommendationRuleSet {
   selectionMode    String       @default("hybrid") // ai (heuristic), manual, hybrid
   pinnedIds        Json         @default("[]")
   targetRules      Json         @default("[]")
+  targetMode       String       @default("filter") // filter (legacy) or allocate per THEN group
   targetLogic      String       @default("AND")
   excludeTags      Json         @default("[]")
   excludedProductIds Json       @default("[]")
