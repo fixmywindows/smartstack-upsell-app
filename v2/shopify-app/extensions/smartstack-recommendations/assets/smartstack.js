@@ -414,7 +414,10 @@
       const customHeading = String(block.dataset.heading || '').trim();
       // Legacy app blocks were saved with "Pairs perfectly with" regardless of type.
       const legacyDefault = customHeading === 'Pairs perfectly with' && kind !== 'complement';
-      heading.textContent = customHeading && !legacyDefault ? customHeading : (data.heading || 'Recommended products');
+      const unverifiedPairHeading = kind === 'bought_together' && data.basis !== 'order_history'
+        && /^(frequently|often) bought together$/i.test(customHeading);
+      heading.textContent = customHeading && !legacyDefault && !unverifiedPairHeading
+        ? customHeading : (data.heading || 'Recommended products');
       const head=block.querySelector('.smartstack-recommendations__head');
       if(head)head.hidden=design.showHeading===false;
       body.replaceChildren(chosen);
