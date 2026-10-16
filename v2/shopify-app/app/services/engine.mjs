@@ -110,27 +110,61 @@ function eligible(source, candidate, config) {
   return true;
 }
 
-function overlap(source, candidate) {
-  const a=tokens(source.title), b=tokens(candidate.title);
-  if (!a.size || !b.size) return 0;
-  return [...a].filter(x=>b.has(x)).length / new Set([...a,...b]).size;
+function tokenSet(product) {
+  const parts=[product.title, product.productType, product.category,
+    ...(product.tags||[]),...(product.collections||[])];
+  const list=[...tokens(parts.join(' '))];
+  // Lightweight morphology helps "boots" and "boot" match without a paid AI
+  // model. This remains deterministic attribute ranking, NOT semantic AI.
+  return new Set(list.map(word=>word.endsWith('ies')?word.slice(0,-3)+'y':
+    word.endsWith('s')&&word.length>4?word.slice(0,-1):word));
 }
-
+function overlap(source,candidate) {
+  const a=tokenSet(source),b=tokenSet(candidate);
+  if(!a.size||!b.size)return 0;
+  return [...a].filter(x=>b.has(x)).length/new Set([...a,...b]).size;
+}
+function sharedCount(a=[],b=[]) {
+  const set=new Set(a.map(x=>String(x).toLowerCase()));
+  return b.filter(x=>set.has(String(x).toLowerCase())).length;
+}
 function similarity(source,candidate) {
-  if (source.category !== candidate.category && source.productType !== candidate.productType) return -Infinity;
-  const sameCategory = source.category === candidate.category ? 100 : 0;
-  const sameType = source.productType === candidate.productType ? 30 : 0;
-  const textOverlap = 30*overlap(source,candidate);
-  const priceDistance = 15 * (1-Math.min(1, Math.abs(Math.log((candidate.priceCents+1)/(source.priceCents+1)))));
-  return sameCategory + sameType + textOverlap + priceDistance + (source.vendor === candidate.vendor ? 4 : 0);
+  // "Similar" means genuinely comparable rather than any product with a
+  // coincidentally similar title, vendor or price.
+  if(source.category!==candidate.category && source.productType!==candidate.productType)return -Infinity;
+  const sameCategory=source.category===candidate.category?90:0;
+  const sameType=source.productType===candidate.productType?38:0;
+  const textOverlap=40*overlap(source,candidate);
+  const tags=12*Math.min(3,sharedCount(source.tags,candidate.tags));
+  const collections=8*Math.min(3,sharedCount(source.collections,candidate.collections));
+  const priceDistance=18*(1-Math.min(1,Math.abs(Math.log(
+    (candidate.priceCents+1)/(source.priceCents+1)))));
+  const priceScore=Number.isFinite(priceDistance)?priceDistance:0;
+  return sameCategory+sameType+textOverlap+tags+collections+priceScore+
+    (source.vendor===candidate.vendor?5:0);
 }
-
+const accessoryTerms=new Set([
+  'accessory','accessories','case','bag','mount','strap','pad','battery',
+  'charger','helmet','binding','boot','lens','cover','cushion','throw','stand','cable'
+]);
 function complementary(source,candidate) {
-  const categories = COMPLEMENTS[source.category] || [];
-  if (!categories.includes(candidate.category)) return -Infinity;
-  let score = 100 - 4*categories.indexOf(candidate.category);
-  score += overlap(source,candidate)*10;
-  return score;
+  // Do not claim two snowboards complement one another merely because they
+  // share "winter sports" tags. Merchant overrides remain possible.
+  if(source.category===candidate.category && source.productType===candidate.productType)return -Infinity;
+  const explicit=COMPLEMENTS[source.category]||[];
+  const mapped=explicit.includes(candidate.category);
+  const wanted=[source.category,source.productType].filter(Boolean);
+  const candidateTags=(candidate.tags||[]).map(x=>String(x).toLowerCase());
+  const declared=wanted.some(name=>candidateTags.includes('for:'+name)||
+    candidateTags.includes('compatible:'+name)||candidateTags.includes('pairs-with:'+name));
+  const cues=tokenSet(candidate);
+  const accessory=[...cues].some(word=>accessoryTerms.has(word));
+  const sameCollections=sharedCount(source.collections,candidate.collections);
+  const sameTags=sharedCount(source.tags,candidate.tags);
+  if(!mapped&&!declared&&!(accessory&&(sameCollections||sameTags)))return -Infinity;
+  return (declared?170:0)+(mapped?110-3*explicit.indexOf(candidate.category):0)
+    +(accessory?28:0)+Math.min(30,10*sameCollections+5*sameTags)
+    +18*overlap(source,candidate);
 }
 
 function coPurchased(source,candidate,pairs) {
