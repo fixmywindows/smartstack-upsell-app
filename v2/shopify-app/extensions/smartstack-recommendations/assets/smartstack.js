@@ -3,7 +3,7 @@
  * Each block initialises independently, including re-rendered theme-editor blocks.
  */
 (() => {
-  const PREVIEW_VERSION = '0.2.0';
+  const PREVIEW_VERSION = '0.3.0';
   const previous = window.__smartstackRenderer;
   if (previous?.version === PREVIEW_VERSION) { previous.scan(); return; }
   previous?.dispose?.();
@@ -40,6 +40,113 @@
     return typeof configured === 'string' && configured.startsWith('/') ? configured.replace(/\/?$/, '/') : '/';
   };
   const viewCart = () => cartRoot() + 'cart';
+
+  const presets = {
+    theme: {cardStyle:'minimal',imageFit:'contain',imageRatio:'square',showQuickAdd:false,buttonStyle:'match'},
+    minimal: {cardStyle:'minimal',imageFit:'contain',imageRatio:'square',showQuickAdd:false,buttonStyle:'text'},
+  };
+  const validEnum = (candidate,choices,fallback) => choices.includes(candidate) ? candidate : fallback;
+  const clamp = (value,min,max,fallback) => {
+    const num=Number(value);
+    return Number.isFinite(num)?Math.min(max,Math.max(min,Math.round(num))):fallback;
+  };
+  const cssHex = value => typeof value==='string' && /^#[0-9a-f]{6}$/i.test(value.trim());
+
+  function themeButtons() {
+    const selectors=[
+      'product-form button[type="submit"]',
+      '.product-form__submit',
+      'form[action*="/cart/add"] button[type="submit"]',
+      'button[name="add"]',
+      '.product__info-container .button'
+    ];
+    for(const selector of selectors){
+      const node=document.querySelector(selector);
+      if(node && !node.closest('[data-smartstack-block]')) return node;
+    }
+    return null;
+  }
+  const isOpaqueColor = value => typeof value==='string' &&
+    (/^#[0-9a-f]{3,8}$/i.test(value) || /^rgb\(/.test(value) || /^hsl\(/.test(value)) &&
+    !/rgba\([^)]+,\s*0(?:\.0+)?\)/.test(value) && value!=='transparent';
+
+  function getDesign(block,studio) {
+    const kind=block.dataset.blockKind || 'complement';
+    const source=block.dataset.styleSource === 'block' ? 'block' : 'studio';
+    const defaults=kind==='bought_together'?{layout:'compact'}:{layout:'grid'};
+    const base={...defaults,...presets.theme,
+      showHeading:true,showPrice:true,showVendor:false,desktopColumns:3,mobileColumns:2,
+      cardGap:16,cardRadius:8,bundleLayout:'list',headingAlign:'left',buttonColor:''};
+    const design=source==='studio' && studio && typeof studio==='object' ? {...base,...studio} : {
+      ...base,
+      layout:block.dataset.layout||'grid',
+      cardStyle:block.classList.contains('smartstack-recommendations--minimal')?'minimal':
+        block.classList.contains('smartstack-recommendations--soft')?'soft':'bordered',
+      imageRatio:block.dataset.imageRatio||'square',
+      imageFit:block.dataset.imageFit||'contain',
+      showQuickAdd:block.dataset.showQuickAdd!=='false',
+      showPrice:block.dataset.showPrice!=='false',
+      showVendor:block.dataset.showVendor==='true',
+      buttonStyle:block.dataset.buttonStyle||'match',
+      desktopColumns:block.style.getPropertyValue('--ss-cols').trim()||3,
+      mobileColumns:block.style.getPropertyValue('--ss-mobile-cols').trim()||2,
+      cardGap:parseFloat(block.style.getPropertyValue('--ss-gap'))||16,
+      cardRadius:parseFloat(block.style.getPropertyValue('--ss-radius'))||8,
+      buttonColor:block.style.getPropertyValue('--ss-accent').trim(),
+    };
+    const quick=block.dataset.quickAddOverride;
+    if(quick==='show') design.showQuickAdd=true;
+    if(quick==='hide') design.showQuickAdd=false;
+    const price=block.dataset.priceOverride;
+    if(price==='show') design.showPrice=true;
+    if(price==='hide') design.showPrice=false;
+    design.layout=validEnum(design.layout,['grid','carousel','compact'],base.layout);
+    design.cardStyle=validEnum(design.cardStyle,['minimal','bordered','soft'],'minimal');
+    design.imageFit=validEnum(design.imageFit,['contain','cover'],'contain');
+    design.imageRatio=validEnum(design.imageRatio,['square','portrait','landscape'],'square');
+    design.buttonStyle=validEnum(design.buttonStyle,['match','solid','outline','text'],'match');
+    design.bundleLayout=validEnum(design.bundleLayout,['list','cards'],'list');
+    design.headingAlign=validEnum(design.headingAlign,['left','center'],'left');
+    design.cardGap=clamp(design.cardGap,8,32,16);
+    design.cardRadius=clamp(design.cardRadius,0,24,8);
+    design.desktopColumns=clamp(design.desktopColumns,2,4,3);
+    design.mobileColumns=clamp(design.mobileColumns,1,2,2);
+    return design;
+  }
+
+  function applyDesign(block,design) {
+    block.__ssDesign=design;
+    block.dataset.ssCardStyle=design.cardStyle;
+    block.dataset.ssButtonStyle=design.buttonStyle;
+    block.dataset.ssPreset=design.preset||'theme';
+    block.style.setProperty('--ss-gap',design.cardGap+'px');
+    block.style.setProperty('--ss-radius',design.cardRadius+'px');
+    block.style.setProperty('--ss-cols',String(design.desktopColumns));
+    block.style.setProperty('--ss-mobile-cols',String(design.mobileColumns));
+    block.style.setProperty('--ss-image-ratio',
+      design.imageRatio==='portrait'?'4 / 5':design.imageRatio==='landscape'?'4 / 3':'1 / 1');
+    block.style.setProperty('--ss-image-fit',design.imageFit);
+
+    let bg='#24252a',fg='#fff',radius=design.cardRadius+'px',size='.875rem',border='transparent';
+    const buyButton=themeButtons();
+    if(buyButton){
+      const style=getComputedStyle(buyButton);
+      if(isOpaqueColor(style.backgroundColor)) bg=style.backgroundColor;
+      if(isOpaqueColor(style.color)) fg=style.color;
+      if(style.borderRadius && style.borderRadius!=='0px') radius=style.borderRadius;
+      if(style.fontSize) size=style.fontSize;
+      if(isOpaqueColor(style.borderTopColor) && style.borderTopWidth!=='0px')border=style.borderTopColor;
+    }
+    if(cssHex(design.buttonColor)) bg=design.buttonColor;
+    block.style.setProperty('--ss-button-bg',bg);
+    block.style.setProperty('--ss-button-fg',fg);
+    block.style.setProperty('--ss-button-border',border);
+    block.style.setProperty('--ss-button-radius',radius);
+    block.style.setProperty('--ss-button-size',size);
+    const header=block.querySelector('.smartstack-recommendations__head');
+    if(header)header.dataset.align=design.headingAlign;
+  }
+
 
   function showStatus(block, message) {
     const status = block.querySelector('.smartstack-recommendations__status');
@@ -112,8 +219,12 @@
     link.href = href;
     link.append(create('h3', 'smartstack-recommendations__product-name', item.title || 'Product'));
     detail.append(link);
-    detail.append(create('p', 'smartstack-recommendations__price', item.priceFormatted || ''));
-    if (block.dataset.showQuickAdd !== 'false') {
+    const design=block.__ssDesign||{};
+    if (design.showVendor && item.vendor) detail.prepend(create('span','smartstack-recommendations__vendor',item.vendor));
+    if (design.showPrice !== false && item.priceFormatted) {
+      detail.append(create('p', 'smartstack-recommendations__price', item.priceFormatted));
+    }
+    if (design.showQuickAdd) {
       const button = create('button', 'smartstack-recommendations__button',
         validVariantId(item.variantId) ? 'Add to basket' : 'View options');
       button.type = 'button';
@@ -144,7 +255,7 @@
 
   function makeCardCollection(block, items) {
     const grid = create('div', 'smartstack-recommendations__products');
-    const layout = block.dataset.layout === 'carousel' ? 'carousel' : 'grid';
+    const layout = block.__ssDesign?.layout || 'grid';
     grid.dataset.layout = layout;
     for (const item of items) {
       if (!item.available) continue;
@@ -169,6 +280,7 @@
     const candidates = data.items.filter(item => item.available && validVariantId(item.variantId)).slice(0, 3);
     if (!candidates.length) return null;
     const wrap = create('div', 'smartstack-recommendations__bundle');
+    wrap.dataset.layout=block.__ssDesign?.bundleLayout==='cards'?'cards':'list';
     const list = create('div', 'smartstack-recommendations__bundle-list');
     const selected = new Set(candidates.map(item => String(item.id)));
 
@@ -259,7 +371,9 @@
     const kind = block.dataset.blockKind || 'complement';
     const signature = [
       id,kind,block.dataset.maxItems,block.dataset.heading,block.dataset.layout,
-      block.dataset.showQuickAdd,block.dataset.sourceVariantId
+      block.dataset.showQuickAdd,block.dataset.sourceVariantId,
+      block.dataset.styleSource,block.dataset.quickAddOverride,block.dataset.priceOverride,
+      block.dataset.imageRatio,block.dataset.imageFit,block.dataset.buttonStyle
     ].join('|');
     if (!force && states.get(block) === signature) return;
     states.set(block,signature);
@@ -281,6 +395,8 @@
       const data = await response.json();
       if (states.get(block) !== signature) return;
       if (!data || !Array.isArray(data.items)) throw new Error('Unexpected recommendation response');
+      const design=getDesign(block,data.design);
+      applyDesign(block,design);
 
       const valid = data.items.filter(item => item.available && safePath(item.url));
       const body = block.querySelector('.smartstack-recommendations__body');
@@ -299,6 +415,8 @@
       // Legacy app blocks were saved with "Pairs perfectly with" regardless of type.
       const legacyDefault = customHeading === 'Pairs perfectly with' && kind !== 'complement';
       heading.textContent = customHeading && !legacyDefault ? customHeading : (data.heading || 'Recommended products');
+      const head=block.querySelector('.smartstack-recommendations__head');
+      if(head)head.hidden=design.showHeading===false;
       body.replaceChildren(chosen);
       content.hidden = false;
       if (status) status.hidden = true;
