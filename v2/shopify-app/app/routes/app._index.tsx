@@ -70,7 +70,7 @@ export default function SmartStackHome(){
           </div>
         </div>
         <div className="ssr-home-hero-art" aria-label="Example of one recommendation block filled by multiple rules">
-          <div className="ssr-home-art-caption">ONE SMARTER PRODUCT SHELF</div>
+          <div className="ssr-home-art-caption">EXAMPLE · ONE SMARTER PRODUCT SHELF</div>
           <div className="ssr-home-art-row"><span>IF</span> Snowboard products <b>→</b><strong>3 matches</strong></div>
           <div className="ssr-home-art-row"><span>IF</span> Outdoor accessories <b>→</b><strong>3 matches</strong></div>
           <div className="ssr-home-art-row"><span>IF</span> General fallback <b>→</b><strong>2 matches</strong></div>
