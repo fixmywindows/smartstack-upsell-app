@@ -185,3 +185,20 @@ test("Starts/ends operators work with titles, tags and metafields regardless of 
   assert.equal(evaluateRule(source,rule("title","not_starts_with","WIN")),false);
   assert.equal(evaluateRule(source,rule("title","not_ends_with","BOARD")),false);
 });
+
+test("merchant THEN conditions can produce cross-category candidate matches in every block type",()=>{
+  const other={...board,id:"helmet",title:"Winter helmet",category:"helmets",productType:"helmet",
+    tags:["safety"],priceCents:5000};
+  for(const kind of ["similar","complement","bought_together","bundle"]){
+    const result=recommend({sourceId:"source",products:[source,other,cheapBoard],config:{
+      kind,mode:"ai",maxItems:3,
+      ruleGroups:[group("AND",rule("tags","contains","safety"))],
+      ruleOuterLogic:"AND"
+    }});
+    assert.deepEqual(result.items.map(item=>item.product.id),["helmet"],kind);
+    if(kind==="bought_together") {
+      assert.equal(result.basis,"cold_start");
+      assert.doesNotMatch(result.heading,/frequently/i);
+    }
+  }
+});
