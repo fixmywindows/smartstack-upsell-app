@@ -71,7 +71,7 @@ test("Analytics uses authenticated data; engagement requires confirmed privacy c
  const proxy=read("app/routes/proxy.events.ts");
  const storefront=read("extensions/smartstack-recommendations/assets/smartstack.js");
  assert.match(nav,/href="\/app\/analytics"/);
- assert.match(ui,/Recommended products purchased/);
+ assert.match(ui,/Directly attributed products purchased/);
  assert.match(ui,/Estimated commission/);
  assert.match(ui,/Combinations to review/);
  assert.match(report,/if\(!paid\)return/);
