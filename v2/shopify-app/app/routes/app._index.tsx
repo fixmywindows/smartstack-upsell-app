@@ -184,6 +184,23 @@ export default function SmartStackHome(){
             Start by creating your first IF → THEN row in the Rule Builder.
           </div>}
       </section>
+      <div style={{background:"#f5f2ff",border:"1px solid #e3dafc",borderRadius:14,
+        padding:17,display:"flex",flexWrap:"wrap",alignItems:"center",
+        justifyContent:"space-between",gap:14,marginTop:15}}>
+        <div>
+          <strong style={{display:"block",fontSize:15,color:"#332a60"}}>
+            Bought Together can now use verified order evidence
+          </strong>
+          <span style={{display:"block",fontSize:12,color:"#6b6685",marginTop:5}}>
+            Optional read_orders permission is required. Nothing is read until
+            the store owner approves it. Test orders never count as real evidence.
+          </span>
+        </div>
+        <Link to="/app/orders" className="ssr-home-primary"
+          style={{background:"#7057d5",color:"#fff",whiteSpace:"nowrap"}}>
+          Review order evidence →
+        </Link>
+      </div>
       <div className="ssr-home-note">
         <span>✦</span> Automatic suggestions currently use catalogue attributes, not a connected AI model.
         Subscription billing, real bundle discounts and commission collection remain disabled in this development pilot.
