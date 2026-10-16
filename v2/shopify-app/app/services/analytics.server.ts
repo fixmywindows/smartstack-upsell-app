@@ -7,7 +7,7 @@ const percent=(num:number,den:number)=>den>0?Math.round(num/den*10000)/100:0;
 export const formatMoney=(minor:number,code:string)=>{
   try{
     const formatter=new Intl.NumberFormat("en-GB",{style:"currency",currency:code});
-    return formatter.format(minor/10**formatter.resolvedOptions().maximumFractionDigits);
+    return formatter.format(minor/10**(formatter.resolvedOptions().maximumFractionDigits??2));
   }catch{return String(minor);}
 };
 export async function analyticsReport(shopDomain:string,scope:string|null|undefined,url:URL){
@@ -77,7 +77,7 @@ export async function analyticsReport(shopDomain:string,scope:string|null|undefi
     }),
     db.recommendationEvent.groupBy({
       by:["productId","kind","setId"],where:{...eventWhere,type:"click"},
-      _count:{_all:true},take:300
+      _count:{_all:true},orderBy:{_count:{productId:"desc"}},take:300
     }),
     db.recommendationPurchase.groupBy({
       by:["setId","currencyCode"],where:{...purchaseWhere,kind:"bundle"},
