@@ -1,7 +1,7 @@
 import type {LoaderFunctionArgs} from "react-router";
 import {Form,Link,useLoaderData} from "react-router";
 import {authenticate} from "../shopify.server";
-import {analyticsReport,formatMoney} from "../services/analytics.server";
+import {analyticsReport} from "../services/analytics.server";
 import "../styles/rule-journey.css";
 
 export const loader=async({request}:LoaderFunctionArgs)=>{
@@ -18,6 +18,12 @@ const KIND_NAMES:Record<string,string>={
   complement:"Complementary",bought_together:"Bought together",bundle:"Complete the set"
 };
 const pct=(value:number)=>value.toFixed(2)+"%";
+const formatMoney=(minor:number,code:string)=>{
+  try{
+    const f=new Intl.NumberFormat("en-GB",{style:"currency",currency:code});
+    return f.format(minor/10**(f.resolvedOptions().maximumFractionDigits??2));
+  }catch{return String(minor);}
+};
 
 function RowChart({daily,field,label,tone}:{
   daily:Array<{date:string;views:number;clicks:number;adds:number;units:number;revenueMinor:number}>;
