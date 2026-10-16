@@ -112,7 +112,7 @@ export async function getRecommendations(
   }
 
   const mapProduct = (p:Product) => ({
-    id:p.id,title:p.title,
+    id:p.id,title:p.title,vendor:p.vendor,
     url:"/products/"+encodeURIComponent(p.handle),
     imageUrl:p.imageUrl,available:p.available,
     variantId:p.variantId?.split("/").pop()||"",
@@ -122,8 +122,15 @@ export async function getRecommendations(
     }).format(p.priceCents/100),
   });
 
+  // Do not claim real co-purchases when the app only has manual/attribute suggestions.
+  const observed = kind === "bought_together" &&
+    (output.items as Array<{evidence?:string}>).some(item => item.evidence === "observed");
+  const truthfulHeading = kind === "bought_together" && !observed &&
+    /^(frequently|often) bought together$/i.test(output.heading.trim())
+    ? "Pairs well with" : output.heading;
+
   return {
-    heading:output.heading,
+    heading:truthfulHeading,
     basis:output.basis,
     warning:output.warning,
     matchedSet:chosen?{id:chosen.id,name:chosen.name,priority:chosen.priority}:null,

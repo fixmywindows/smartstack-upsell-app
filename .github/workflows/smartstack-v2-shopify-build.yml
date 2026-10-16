@@ -47,9 +47,9 @@ jobs:
       - name: Validate Prisma schema
         working-directory: v2/shopify-app
         run: npx prisma validate
-      - name: Test theme and Phase 2 rule engine
+      - name: Test theme, rules and Design Studio
         working-directory: v2/shopify-app
-        run: node --test tests/widget.test.mjs tests/phase2-rules.test.mjs
+        run: node --test tests/widget.test.mjs tests/phase2-rules.test.mjs tests/design.test.mjs
       - name: Typecheck app
         working-directory: v2/shopify-app
         run: npm run typecheck
@@ -130,4 +130,35 @@ jobs:
               RAISE EXCEPTION 'Merchant pins were altered';
             END IF;
           END $$;
+          SQL
+
+      - name: Verify Phase 3 design migration preserves existing catalogue and sets
+        working-directory: v2/shopify-app
+        env:
+          PGPASSWORD: test
+        run: |
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U test -d smartstack_test <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM information_schema.tables
+              WHERE table_name = 'RecommendationDesign') THEN
+              RAISE EXCEPTION 'Design Studio table does not exist';
+            END IF;
+            IF (SELECT COUNT(*) FROM "RecommendationBlock" WHERE id='legacy-test') <> 1 THEN
+              RAISE EXCEPTION 'Existing recommendation blocks were lost';
+            END IF;
+            IF (SELECT COUNT(*) FROM "RecommendationRuleSet" WHERE "legacyBlockId"='legacy-test') <> 1 THEN
+              RAISE EXCEPTION 'Imported recommendation sets were lost';
+            END IF;
+            IF (SELECT plan FROM "MerchantShop" WHERE domain='test-shop.myshopify.com') <> 'free' THEN
+              RAISE EXCEPTION 'Store plan changed unexpectedly';
+            END IF;
+          END $$;
+          SQL
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U test -d smartstack_test <<'SQL'
+          INSERT INTO "RecommendationDesign"
+            ("id","shopDomain","kind","settings","updatedAt")
+          VALUES ('design-test','test-shop.myshopify.com','similar',
+            '{"preset":"theme","showQuickAdd":false}'::jsonb,CURRENT_TIMESTAMP);
+          SELECT "kind" FROM "RecommendationDesign" WHERE "id"='design-test';
           SQL

@@ -18,6 +18,7 @@ export default function SmartStackApp() {
       <a href="/app/catalogue">Catalogue</a>
       <a href="/app/blocks">Recommendation sets</a>
       <a href="/app/preview">Preview matches</a>
+      <a href="/app/design">Design Studio</a>
     </NavMenu>
     <Outlet />
   </AppProvider>;

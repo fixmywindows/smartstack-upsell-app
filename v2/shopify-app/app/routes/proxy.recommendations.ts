@@ -1,5 +1,7 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
+import db from "../db.server";
+import { normaliseDesign } from "../utils/design-settings";
 import { BLOCK_KINDS, getRecommendations, type BlockKind } from "../services/recommendations.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -15,8 +17,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const max = Math.max(1, Math.min(12, Number(url.searchParams.get("max")) || 4));
   const sourceId = "gid://shopify/Product/" + numericId;
   try {
-    const result = await getRecommendations(session.shop, sourceId, kind as BlockKind, max);
-    return Response.json(result, { headers: { "Cache-Control": "private, no-store" } });
+    const [result, savedDesign] = await Promise.all([
+      getRecommendations(session.shop, sourceId, kind as BlockKind, max),
+      db.recommendationDesign.findUnique({
+        where: { shopDomain_kind: { shopDomain: session.shop, kind: kind as BlockKind } },
+        select: { settings: true },
+      }),
+    ]);
+    // Only presentation values are returned; never expose merchant rules, costs or tokens.
+    const design = normaliseDesign(kind as BlockKind, savedDesign?.settings);
+    return Response.json({ ...result, design }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     if (error instanceof Error && error.message.includes("Source product does not exist")) {
       return Response.json({ heading: "Recommendations", items: [] });
