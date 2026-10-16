@@ -37,7 +37,7 @@ function Toggle({options,value,onChange,label}:{
 type ChoiceKind="tags"|"collections"|"metafields"|"values"|"category"|"vendor"|"product_type";
 type Choice={value:string;label:string;count:number};
 /** Searchable native select with a deliberate manual-entry escape hatch. */
-function CatalogueChoice({kind,value,onChange,label,metafieldKey="",fallback=[]}:{
+export function CatalogueChoice({kind,value,onChange,label,metafieldKey="",fallback=[]}:{
   kind:ChoiceKind;value:string;onChange:(next:string)=>void;label:string;
   metafieldKey?:string;fallback?:string[];
 }){
