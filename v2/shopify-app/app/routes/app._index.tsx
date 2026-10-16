@@ -59,6 +59,10 @@ export default function Dashboard(){
         <Link to="/app/preview" style={{...linkButton,background:"#fff",color:"#24272d",
           border:"1px solid #cfd4db"}}>Preview product matches</Link>
       </div>
+      <p style={{...small,marginTop:15}}>
+        <Link to="/app/design">Open Design Studio →</Link> to match the product cards
+        and shopping buttons to your Shopify theme.
+      </p>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",
         gap:12,marginTop:20}}>
         {[
