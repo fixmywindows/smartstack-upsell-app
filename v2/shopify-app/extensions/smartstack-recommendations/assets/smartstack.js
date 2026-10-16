@@ -259,59 +259,98 @@
     container.append(status);
   }
 
-  function makeCard(item, block) {
-    const href = safePath(item.url);
-    if (!href) return null;
-    const article = create('article', 'smartstack-recommendations__item');
-    const media = create('a', 'smartstack-recommendations__media');
-    media.href = href;
-    media.setAttribute('aria-label', 'View ' + (item.title || 'product'));
-    if (item.imageUrl) {
-      const image = create('img', 'smartstack-recommendations__photo');
-      image.src = String(item.imageUrl);
-      image.alt = item.title || 'Product';
-      image.loading = 'lazy';
-      image.decoding = 'async';
-      media.append(image);
-    } else {
-      media.append(create('div', 'smartstack-recommendations__image-fallback', 'Image coming soon'));
+  // Use the verified Shopify-synced variants rather than assuming the
+  // product's first variant is what the customer intends to buy.
+  function variantOptions(item) {
+    return Array.isArray(item.variants)
+      ? item.variants.filter(v => validVariantId(v.id)) : [];
+  }
+  function variantName(variant) {
+    const values=Array.isArray(variant.options)
+      ? variant.options.filter(v => v && v.name && v.value && v.value !== 'Default Title')
+        .map(v=>v.name+': '+v.value) : [];
+    return values.length ? values.join(' · ') : variant.title||'Default';
+  }
+  function variantChoice(item,select,link) {
+    const options=variantOptions(item);
+    if(item.variantsComplete===false) return '';
+    if(select) return select.value || '';
+    if(options.length===1) return options[0].id;
+    if(options.length===0 && validVariantId(item.variantId))return item.variantId;
+    return '';
+  }
+  function makeVariantSelect(item,onSelect) {
+    const choices=variantOptions(item);
+    if(item.variantsComplete===false || choices.length<=1)return null;
+    const selector=create('select','smartstack-recommendations__variant-select');
+    selector.setAttribute('aria-label','Choose options for '+(item.title||'product'));
+    const prompt=create('option','','Select options');
+    prompt.value='';
+    selector.append(prompt);
+    for(const choice of choices){
+      const node=create('option','',variantName(choice));
+      node.value=choice.id;
+      selector.append(node);
     }
-    article.append(media);
+    selector.addEventListener('change',()=>onSelect?.(choices.find(v=>v.id===selector.value)||null));
+    return selector;
+  }
 
-    const detail = create('div', 'smartstack-recommendations__detail');
-    const link = create('a', 'smartstack-recommendations__product-link');
-    link.href = href;
-    link.append(create('h3', 'smartstack-recommendations__product-name', item.title || 'Product'));
+  function makeCard(item, block) {
+    const href=safePath(item.url);
+    if(!href)return null;
+    const article=create('article','smartstack-recommendations__item');
+    const media=create('a','smartstack-recommendations__media');
+    media.href=href;
+    media.setAttribute('aria-label','View '+(item.title||'product'));
+    if(item.imageUrl){
+      const image=create('img','smartstack-recommendations__photo');
+      image.src=String(item.imageUrl);
+      image.alt=item.title||'Product';image.loading='lazy';image.decoding='async';
+      media.append(image);
+    }else media.append(create('div','smartstack-recommendations__image-fallback','Image coming soon'));
+    article.append(media);
+    const detail=create('div','smartstack-recommendations__detail');
+    const link=create('a','smartstack-recommendations__product-link');
+    link.href=href;
+    link.append(create('h3','smartstack-recommendations__product-name',item.title||'Product'));
     detail.append(link);
     const design=block.__ssDesign||{};
-    if (design.showVendor && item.vendor) detail.prepend(create('span','smartstack-recommendations__vendor',item.vendor));
-    if (design.showPrice !== false && item.priceFormatted) {
-      detail.append(create('p', 'smartstack-recommendations__price', item.priceFormatted));
-    }
-    if (design.showQuickAdd) {
-      const button = create('button', 'smartstack-recommendations__button',
-        validVariantId(item.variantId) ? 'Add to basket' : 'View options');
-      button.type = 'button';
-      if (validVariantId(item.variantId)) {
-        const note = create('div', '');
-        button.addEventListener('click', async () => {
-          button.disabled = true;
-          button.textContent = 'Adding…';
-          try {
-            await addToCart([{id:item.variantId, quantity:1}]);
-            button.textContent = 'Added ✓';
-            feedback(note, 'Added to your basket.', true);
-          } catch (error) {
-            button.textContent = 'Try again';
-            button.disabled = false;
-            feedback(note, error instanceof Error ? error.message : 'Please try again');
-          }
-        });
-        detail.append(button, note);
-      } else {
-        button.addEventListener('click', () => { location.href = href; });
-        detail.append(button);
-      }
+    if(design.showVendor&&item.vendor)detail.prepend(create('span','smartstack-recommendations__vendor',item.vendor));
+    const price=design.showPrice!==false && item.priceFormatted
+      ?create('p','smartstack-recommendations__price',item.priceFormatted):null;
+    if(price)detail.append(price);
+    if(design.showQuickAdd){
+      const feedbackArea=create('div','');
+      const select=makeVariantSelect(item,variant=>{
+        if(price && variant)price.textContent=money(variant.priceMinor,item.currencyCode);
+        button.textContent=variant?'Add to basket':'Choose options';
+        button.disabled=false;
+      });
+      if(select)detail.append(select);
+      const button=create('button','smartstack-recommendations__button','');
+      button.type='button';
+      const canChoose=Boolean(select);
+      const initial=variantChoice(item,select);
+      button.textContent=initial?'Add to basket':canChoose?'Choose options':'View options';
+      button.addEventListener('click',async()=>{
+        const chosen=variantChoice(item,select);
+        if(!chosen){
+          if(!canChoose) location.href=href;
+          else feedback(feedbackArea,'Select the product options above.');
+          return;
+        }
+        button.disabled=true;button.textContent='Adding…';
+        try{
+          await addToCart([{id:chosen,quantity:1}]);
+          button.textContent='Added ✓';
+          feedback(feedbackArea,'Added to your basket.',true);
+        }catch(error){
+          button.textContent='Try again';
+          feedback(feedbackArea,error instanceof Error?error.message:'Please try again');
+        }finally{button.disabled=false;}
+      });
+      detail.append(button,feedbackArea);
     }
     article.append(detail);
     return article;
