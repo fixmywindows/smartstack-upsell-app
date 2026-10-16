@@ -104,6 +104,7 @@ export type ValidatedRuleSet = {
   excludeRules: MatchGroup[]; excludeLogic: string;
   fallbackMode: "next" | "stop";
   maxItems: number;
+  bundleDiscountPercent: number;
 };
 
 export function parseRuleSet(form: FormData, plan: string): ValidatedRuleSet {
@@ -143,6 +144,11 @@ export function parseRuleSet(form: FormData, plan: string): ValidatedRuleSet {
   const tags = text(form.get("excludeTags"),400).split(",").map(v=>v.trim().toLowerCase()).filter(Boolean).slice(0,30);
   const parsedPriority = Number(form.get("priority"));
   const priority = Number.isFinite(parsedPriority) ? Math.max(1,Math.min(100,Math.round(parsedPriority))) : 50;
+  const discountRequested=Number(form.get("bundleDiscountPercent")||0);
+  if(!Number.isInteger(discountRequested)||discountRequested<0||discountRequested>30){
+    return bad("Choose a bundle discount preview between 0% and 30%.");
+  }
+  const bundleDiscountPercent=kind==="bundle"?discountRequested:0;
   const parsedMax = Number(form.get("maxItems"));
   const maxItems = Number.isFinite(parsedMax) ? Math.max(1,Math.min(kind==="bundle"?7:8,Math.round(parsedMax))) : 3;
 
@@ -152,7 +158,7 @@ export function parseRuleSet(form: FormData, plan: string): ValidatedRuleSet {
     sourceRules: sourceMatch === "rules" ? sourceRules : [],
     sourceLogic, selectionMode, pinnedIds, targetRules, targetLogic, excludeTags: tags,
     excludedProductIds, excludeRules, excludeLogic,
-    fallbackMode, maxItems,
+    fallbackMode, maxItems, bundleDiscountPercent,
   };
 }
 
@@ -216,7 +222,7 @@ export async function duplicateRuleSet(shopDomain: string, setId: string) {
         excludedProductIds: existing.excludedProductIds as Prisma.InputJsonValue,
         excludeRules: existing.excludeRules as Prisma.InputJsonValue,
         excludeLogic: existing.excludeLogic, fallbackMode: existing.fallbackMode,
-        maxItems: existing.maxItems
+        maxItems: existing.maxItems, bundleDiscountPercent: existing.bundleDiscountPercent
       }
     });
   }, { isolationLevel: "Serializable" });

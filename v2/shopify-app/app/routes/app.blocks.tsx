@@ -109,7 +109,7 @@ export const action=async({request}:ActionFunctionArgs)=>{
         sourceRules:"[]",sourceLogic:"AND",selectionMode:"hybrid",pinnedIds:"[]",
         targetRules:"[]",targetLogic:"AND",excludeRules:"[]",excludeLogic:"OR",
         excludeTags:"",excludedProductIds:"[]",fallbackMode:"next",
-        maxItems:kind==="bundle"?"2":"3"
+        maxItems:kind==="bundle"?"2":"3",bundleDiscountPercent:"0"
       };
       Object.entries(settings).forEach(([k,v])=>f.set(k,v));
       const created=await tools.saveRuleSet(session.shop,f);
@@ -145,7 +145,8 @@ export const action=async({request}:ActionFunctionArgs)=>{
         excludeRules:JSON.stringify(groupsForEditor(record.excludeRules,record.excludeLogic)),
         excludeLogic:record.excludeLogic,
         fallbackMode:String(form.get("fallbackMode")??record.fallbackMode),
-        maxItems:String(form.get("maxItems")??record.maxItems)
+        maxItems:String(form.get("maxItems")??record.maxItems),
+        bundleDiscountPercent:String(record.bundleDiscountPercent)
       };
       Object.entries(values).forEach(([k,v])=>save.set(k,v));
       await tools.saveRuleSet(session.shop,save);

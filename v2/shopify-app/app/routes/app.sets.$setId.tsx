@@ -341,6 +341,9 @@ export default function SetEditor(){
   const [excludedProductIds,setExcludedProductIds]=useState(strArr(existing?.excludedProductIds));
   const [excludeLogic,setExcludeLogic]=useState(existing?.excludeLogic||"OR");
   const [fallbackMode,setFallbackMode]=useState(existing?.fallbackMode||"next");
+  const [bundleDiscountPercent,setBundleDiscountPercent]=useState(
+    Number(existing?.bundleDiscountPercent??0)
+  );
   const rulesUsed=(sourceMatch==="rules"?countRuleConditions(sourceGroups):0)
     +countRuleConditions(targetGroups)+countRuleConditions(excludeGroups);
   const freeSlots=data.ruleCap===null?null:Math.max(0,data.ruleCap-rulesUsed);
@@ -442,6 +445,20 @@ export default function SetEditor(){
         </section>
         <section style={box}>
           {pickerTitle("4. Display and prioritise","Fine-tune this set's selection order and number of add-ons.")}
+          {data.kind==="bundle"&&<div style={{padding:15,border:"1px solid #dcd5f7",
+              borderRadius:10,background:"#f8f5ff",margin:"15px 0"}}>
+            <label style={labelStyle}>Potential bundle saving (preview only)
+              <input name="bundleDiscountPercent" type="number" min={0} max={30} step={1}
+                value={bundleDiscountPercent}
+                onChange={e=>setBundleDiscountPercent(Number(e.target.value))}
+                style={{...selectStyle,marginTop:7,maxWidth:170}}/>
+            </label>
+            <p style={muted}>
+              Percentage preview: {bundleDiscountPercent}%. No checkout discount is active.
+              A Shopify Discount Function must be separately generated,
+              deployed, configured and tested before offering savings to shoppers.
+            </p>
+          </div>}
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:16}}>
             <label style={labelStyle}>Set priority (1 = first)
               <input type="number" name="priority" style={{...selectStyle,marginTop:6}}

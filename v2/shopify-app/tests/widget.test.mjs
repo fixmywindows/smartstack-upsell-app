@@ -50,7 +50,7 @@ test('renderer source is valid JavaScript',()=>{
 });
 
 test('multi-item bundle is explicit about no checkout discount and sources current product',()=>{
-  assert.match(js,/No bundle discount is applied yet/);
+  assert.match(js,/No bundle discount is active/);
   assert.match(js,/data\.source/);
   assert.match(js,/Add selected set to basket/);
   assert.match(js,/addToCart\(items\)/);
@@ -80,5 +80,5 @@ test('every storefront block has an eight-product cap, with bundle source includ
   const limit = setting('max_items');
   assert.equal(limit.max,8);
   assert.equal(limit.default,8);
-  assert.match(js,/\.slice\(0, 7\)/);
+  assert.match(js,/\.slice\(0,\s*7\)/);
 });

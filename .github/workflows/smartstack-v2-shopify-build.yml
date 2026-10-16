@@ -49,7 +49,7 @@ jobs:
         run: npx prisma validate
       - name: Test theme, rules and Design Studio
         working-directory: v2/shopify-app
-        run: node --test tests/widget.test.mjs tests/phase2-rules.test.mjs tests/design.test.mjs tests/inline-aggregation.test.mjs tests/inline-admin.test.mjs tests/attribute-pickers.test.mjs
+        run: node --test tests/widget.test.mjs tests/phase2-rules.test.mjs tests/design.test.mjs tests/inline-aggregation.test.mjs tests/inline-admin.test.mjs tests/attribute-pickers.test.mjs tests/phase4.test.mjs
       - name: Typecheck app
         working-directory: v2/shopify-app
         run: npm run typecheck
@@ -235,4 +235,51 @@ jobs:
               WHERE p."shopDomain"='test-shop.myshopify.com' AND v.value='other-shop-secret'
             ) THEN RAISE EXCEPTION 'Cross-tenant tag leaked'; END IF;
           END $$;
+          SQL
+
+      - name: Verify Phase 4 variant and order-signal tables
+        working-directory: v2/shopify-app
+        env:
+          PGPASSWORD: test
+        run: |
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U test -d smartstack_test <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM information_schema.tables
+                WHERE table_name='ProductVariantSnapshot') THEN
+              RAISE EXCEPTION 'Variant table missing';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.tables
+                WHERE table_name='OrderPairObservation') THEN
+              RAISE EXCEPTION 'Order-pair observation table missing';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.tables
+                WHERE table_name='ObservedProductPair') THEN
+              RAISE EXCEPTION 'Product-pair aggregate table missing';
+            END IF;
+            IF (SELECT COUNT(*) FROM "RecommendationRuleSet" WHERE "legacyBlockId"='legacy-test') <> 1 THEN
+              RAISE EXCEPTION 'Legacy IF/THEN set lost in Phase 4';
+            END IF;
+            IF (SELECT "bundleDiscountPercent" FROM "RecommendationRuleSet" WHERE "legacyBlockId"='legacy-test') <> 0 THEN
+              RAISE EXCEPTION 'Bundle preview discount unexpectedly active';
+            END IF;
+            IF (SELECT COUNT(*) FROM "ProductSnapshot" WHERE "shopDomain"='test-shop.myshopify.com') < 1 THEN
+              RAISE EXCEPTION 'Catalogue snapshots lost';
+            END IF;
+          END $$;
+          SQL
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U test -d smartstack_test <<'SQL'
+          INSERT INTO "ProductVariantSnapshot"
+            ("shopDomain","productId","variantId","title","priceMinor",
+              "available","options","updatedAt")
+          VALUES ('test-shop.myshopify.com','gid://shopify/Product/111',
+            'gid://shopify/ProductVariant/888','Blue / Large',9999,true,
+            '[{"name":"Colour","value":"Blue"},{"name":"Size","value":"Large"}]'::jsonb,
+            CURRENT_TIMESTAMP);
+          INSERT INTO "ObservedProductPair"
+            ("shopDomain","productA","productB","orderCount","updatedAt")
+          VALUES ('test-shop.myshopify.com',
+            'gid://shopify/Product/111','gid://shopify/Product/112',2,CURRENT_TIMESTAMP);
+          SELECT "variantId","title" FROM "ProductVariantSnapshot"
+            WHERE "shopDomain"='test-shop.myshopify.com';
           SQL
