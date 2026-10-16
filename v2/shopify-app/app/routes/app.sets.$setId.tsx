@@ -437,7 +437,7 @@ export default function SetEditor(){
             </label>
             <label style={labelStyle}>Maximum add-ons
               <input type="number" name="maxItems" style={{...selectStyle,marginTop:6}}
-                min={1} max={data.kind==="bundle"?3:12} value={maxItems}
+                min={1} max={data.kind==="bundle"?7:8} value={maxItems}
                 onChange={e=>setMaxItems(Number(e.target.value))}/>
             </label>
           </div>
