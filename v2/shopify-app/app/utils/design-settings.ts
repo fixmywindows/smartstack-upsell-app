@@ -1,702 +1,251 @@
-/* SmartStack storefront recommendations — independent OS 2.0 theme blocks.
- * The Shopify app proxy authenticates requests. Tracking and checkout discounts are disabled.
- * Each block initialises independently, including re-rendered theme-editor blocks.
+/**
+ * Browser-safe SmartStack Design Studio configuration.
+ * Never accepts arbitrary CSS, URLs, selectors, or JavaScript from merchants.
+ * Public storefront responses contain only these safe presentation values.
  */
-(() => {
-  const PREVIEW_VERSION = '0.6.0';
-  const previous = window.__smartstackRenderer;
-  if (previous?.version === PREVIEW_VERSION) { previous.scan(); return; }
-  previous?.dispose?.();
+export const DESIGN_KINDS = ["similar","complement","bought_together","bundle"] as const;
+export type DesignKind = typeof DESIGN_KINDS[number];
+export type DesignPreset = "theme"|"minimal"|"editorial"|"bold";
+export type DesignSettings = {
+  preset: DesignPreset;
+  layout: "grid"|"carousel"|"compact";
+  cardStyle: "minimal"|"bordered"|"soft";
+  imageFit: "contain"|"cover";
+  imageRatio: "square"|"portrait"|"landscape";
+  desktopColumns: 2|3|4;
+  mobileColumns: 1|2;
+  cardGap: number;
+  cardRadius: number;
+  showPrice: boolean;
+  showTitle: boolean;
+  showImage: boolean;
+  showVendor: boolean;
+  showQuickAdd: boolean;
+  buttonStyle: "match"|"solid"|"outline"|"text";
+  headingAlign: "left"|"center";
+  showHeading: boolean;
+  bundleLayout: "list"|"cards";
+  buttonColor: string; // empty means automatic theme matching
+  borderColor: string;
+  headingColor: string;
+  titleColor: string;
+  priceColor: string;
+  cardBackground: string;
+  cardPadding: number;
+  borderWidth: number;
+  imageMaxHeight: number;
+  shadow: "none"|"subtle"|"raised";
+  hoverEffect: "none"|"lift"|"zoom";
+  textAlign: "left"|"center";
+  buttonFullWidth: boolean;
+  headingFontSize: number; // 0 = inherit theme
+  titleFontSize: number;
+  priceFontSize: number;
+  headingFontWeight: number; // 0 = inherit theme
+  titleFontWeight: number;
+  priceFontWeight: number;
+  headingItalic: boolean;
+  titleItalic: boolean;
+  priceItalic: boolean;
+  customCss: string;
+};
 
-  const states = new WeakMap();
-  // Do not collect behavioural data before Shopify confirms analytics consent.
-  // No cookies, IP addresses or customer identifiers are sent to SmartStack.
-  if(window.Shopify?.loadFeatures){
-    window.Shopify.loadFeatures([{name:'consent-tracking-api',version:'0.1'}],()=>{});
-  }
-  const analyticsAllowed=()=>{
-    try{return window.Shopify?.customerPrivacy?.analyticsProcessingAllowed?.()===true;}
-    catch{return false;}
+const PRESET_DEFAULTS: Record<DesignPreset,Partial<DesignSettings>> = {
+  theme: {
+    cardStyle:"minimal", imageFit:"contain", imageRatio:"square",
+    showQuickAdd:false, buttonStyle:"match", cardGap:16, cardRadius:8,
+    headingAlign:"left", showPrice:true, showVendor:false,
+  },
+  minimal: {
+    cardStyle:"minimal", imageFit:"contain", imageRatio:"square",
+    showQuickAdd:false, buttonStyle:"text", cardGap:12, cardRadius:0,
+    headingAlign:"left", showPrice:true, showVendor:false,
+  },
+  editorial: {
+    cardStyle:"minimal", imageFit:"cover", imageRatio:"portrait",
+    showQuickAdd:false, buttonStyle:"outline", cardGap:20, cardRadius:0,
+    headingAlign:"left", showPrice:true, showVendor:true,
+  },
+  bold: {
+    cardStyle:"bordered", imageFit:"contain", imageRatio:"square",
+    showQuickAdd:true, buttonStyle:"solid", cardGap:16, cardRadius:14,
+    headingAlign:"left", showPrice:true, showVendor:false,
+  },
+};
+
+export const presets = [
+  {id:"theme",title:"Match my store",description:"Inherit typography and button styling from the active theme."},
+  {id:"minimal",title:"Minimal",description:"Borderless product cards with understated text links."},
+  {id:"editorial",title:"Editorial",description:"Image-first product merchandising with taller photography."},
+  {id:"bold",title:"Bold",description:"Stronger product cards and visible shopping actions."},
+] as const;
+
+const perKind = (kind:DesignKind) => ({
+  layout:kind==="bought_together" ? "compact" as const : "grid" as const,
+  bundleLayout:"list" as const,
+  desktopColumns:3 as const,
+  mobileColumns:2 as const,
+  showHeading:true,
+  buttonColor:"",
+  showTitle:true,showImage:true,
+  borderColor:"",headingColor:"",titleColor:"",priceColor:"",cardBackground:"",
+  cardPadding:0,borderWidth:1,imageMaxHeight:440,
+  shadow:"none" as const,hoverEffect:"none" as const,textAlign:"left" as const,buttonFullWidth:true,
+  headingFontSize:0,titleFontSize:0,priceFontSize:0,
+  headingFontWeight:0,titleFontWeight:0,priceFontWeight:0,
+  headingItalic:false,titleItalic:false,priceItalic:false,customCss:"",
+});
+
+export function defaultDesign(kind:DesignKind, preset:DesignPreset="theme"):DesignSettings {
+  return {
+    preset,
+    ...perKind(kind),
+    ...PRESET_DEFAULTS[preset],
+  } as DesignSettings;
+}
+
+function isChoice<T extends string>(value:unknown,choices:readonly T[],fallback:T):T {
+  return typeof value==="string" && choices.includes(value as T) ? value as T : fallback;
+}
+function integer(value:unknown,min:number,max:number,fallback:number):number {
+  const parsed=typeof value==="number"?value:Number(value);
+  return Number.isFinite(parsed)?Math.max(min,Math.min(max,Math.round(parsed))):fallback;
+}
+function isHex(value:unknown):value is string {
+  return typeof value==="string" && /^#[0-9a-fA-F]{6}$/.test(value);
+}
+
+/** Deterministically whitelist every property before saving or exposing publicly. */
+export function normaliseDesign(kind:DesignKind,raw:unknown):DesignSettings {
+  const input=raw && typeof raw==="object" && !Array.isArray(raw)
+    ? raw as Record<string,unknown> : {};
+  const preset=isChoice(input.preset,["theme","minimal","editorial","bold"] as const,"theme");
+  const base=defaultDesign(kind,preset);
+  return {
+    preset,
+    layout:isChoice(input.layout,["grid","carousel","compact"] as const,base.layout),
+    cardStyle:isChoice(input.cardStyle,["minimal","bordered","soft"] as const,base.cardStyle),
+    imageFit:isChoice(input.imageFit,["contain","cover"] as const,base.imageFit),
+    imageRatio:isChoice(input.imageRatio,["square","portrait","landscape"] as const,base.imageRatio),
+    desktopColumns:integer(input.desktopColumns,2,4,base.desktopColumns) as 2|3|4,
+    mobileColumns:integer(input.mobileColumns,1,2,base.mobileColumns) as 1|2,
+    cardGap:integer(input.cardGap,8,32,base.cardGap),
+    cardRadius:integer(input.cardRadius,0,24,base.cardRadius),
+    showPrice:typeof input.showPrice==="boolean"?input.showPrice:base.showPrice,
+    showTitle:typeof input.showTitle==="boolean"?input.showTitle:base.showTitle,
+    showImage:typeof input.showImage==="boolean"?input.showImage:base.showImage,
+    showVendor:typeof input.showVendor==="boolean"?input.showVendor:base.showVendor,
+    showQuickAdd:typeof input.showQuickAdd==="boolean"?input.showQuickAdd:base.showQuickAdd,
+    buttonStyle:isChoice(input.buttonStyle,["match","solid","outline","text"] as const,base.buttonStyle),
+    headingAlign:isChoice(input.headingAlign,["left","center"] as const,base.headingAlign),
+    showHeading:typeof input.showHeading==="boolean"?input.showHeading:base.showHeading,
+    bundleLayout:isChoice(input.bundleLayout,["list","cards"] as const,base.bundleLayout),
+    buttonColor:isHex(input.buttonColor)?input.buttonColor:"",
+    borderColor:isHex(input.borderColor)?input.borderColor:"",
+    headingColor:isHex(input.headingColor)?input.headingColor:"",
+    titleColor:isHex(input.titleColor)?input.titleColor:"",
+    priceColor:isHex(input.priceColor)?input.priceColor:"",
+    cardBackground:isHex(input.cardBackground)?input.cardBackground:"",
+    cardPadding:integer(input.cardPadding,0,32,base.cardPadding),
+    borderWidth:integer(input.borderWidth,0,3,base.borderWidth),
+    imageMaxHeight:integer(input.imageMaxHeight,80,600,base.imageMaxHeight),
+    shadow:isChoice(input.shadow,["none","subtle","raised"] as const,base.shadow),
+    hoverEffect:isChoice(input.hoverEffect,["none","lift","zoom"] as const,base.hoverEffect),
+    textAlign:isChoice(input.textAlign,["left","center"] as const,base.textAlign),
+    buttonFullWidth:typeof input.buttonFullWidth==="boolean"?input.buttonFullWidth:base.buttonFullWidth,
+    headingFontSize:integer(input.headingFontSize,0,40,0),
+    titleFontSize:integer(input.titleFontSize,0,24,0),
+    priceFontSize:integer(input.priceFontSize,0,24,0),
+    headingFontWeight:integer(input.headingFontWeight,0,800,0),
+    titleFontWeight:integer(input.titleFontWeight,0,800,0),
+    priceFontWeight:integer(input.priceFontWeight,0,800,0),
+    headingItalic:typeof input.headingItalic==="boolean"?input.headingItalic:false,
+    titleItalic:typeof input.titleItalic==="boolean"?input.titleItalic:false,
+    priceItalic:typeof input.priceItalic==="boolean"?input.priceItalic:false,
+    customCss:typeof input.customCss==="string"?input.customCss.slice(0,2400):"",
   };
-  function track(block,item,type){
-    if(isEditor()||!analyticsAllowed()||!item?.trackingRef||
-      !['render','view','click','add'].includes(type))return;
-    const ref=String(item.trackingRef);
-    if(ref.length>1000||!ref.startsWith('ss1.'))return;
-    const root=block.dataset.proxyPath||'/apps/smartstack';
-    if(!/^\/(?!\/)[a-zA-Z0-9/_-]+$/.test(root))return;
-    const eventId=window.crypto?.randomUUID?.();
-    if(!eventId)return;
-    fetch(root.replace(/\/$/,'')+'/events',{
-      method:'POST',credentials:'same-origin',keepalive:true,
-      headers:{'Content-Type':'application/json','Accept':'application/json',
-        'ngrok-skip-browser-warning':'1'},
-      body:JSON.stringify({eventId,type,trackingRef:ref,consented:true})
-    }).catch(()=>{});
+}
+
+export function isAdvancedDesign(design:DesignSettings,kind:DesignKind):boolean {
+  // Free: theme-matching and minimal design, plus useful on/off display controls.
+  // Growth/Insights: all layouts, card dimensions, custom colours and editorial presets.
+  if (design.preset!=="theme" && design.preset!=="minimal") return true;
+  const base=defaultDesign(kind,design.preset);
+  return (design.cardStyle!==base.cardStyle && design.cardStyle!=="bordered") ||
+    design.imageFit!==base.imageFit || design.imageRatio!==base.imageRatio ||
+    design.desktopColumns!==base.desktopColumns || design.mobileColumns!==base.mobileColumns ||
+    design.cardGap!==base.cardGap || design.cardRadius!==base.cardRadius ||
+    design.buttonStyle!==base.buttonStyle || design.headingAlign!==base.headingAlign ||
+    design.bundleLayout!==base.bundleLayout ||
+    [design.buttonColor,design.borderColor,design.headingColor,design.titleColor,
+      design.priceColor,design.cardBackground,design.customCss].some(Boolean) ||
+    design.cardPadding!==base.cardPadding || design.borderWidth!==base.borderWidth ||
+    design.imageMaxHeight!==base.imageMaxHeight ||
+    design.shadow!==base.shadow || design.hoverEffect!==base.hoverEffect ||
+    design.textAlign!==base.textAlign || design.buttonFullWidth!==base.buttonFullWidth ||
+    design.headingFontSize!==0 || design.titleFontSize!==0 || design.priceFontSize!==0 ||
+    design.headingFontWeight!==0 || design.titleFontWeight!==0 || design.priceFontWeight!==0 ||
+    design.headingItalic || design.titleItalic || design.priceItalic;
+}
+
+export function canSaveDesign(plan:string,settings:DesignSettings,kind:DesignKind):boolean {
+  return plan==="growth" || plan==="insights" || !isAdvancedDesign(settings,kind);
+}
+
+
+/**
+ * Paid CSS is not arbitrary storefront CSS. Merchants can style only the
+ * documented aliases below. The compiler scopes all rules to one SmartStack
+ * block type; outside selectors, @rules, URL/exfiltration and animations are
+ * rejected. This never applies to Shopify's global theme styles.
+ */
+const CSS_ALIASES:Record<string,string>={
+  ".ss-card":".smartstack-recommendations__item",
+  ".ss-image":".smartstack-recommendations__photo",
+  ".ss-title":".smartstack-recommendations__product-name",
+  ".ss-price":".smartstack-recommendations__price",
+  ".ss-button":".smartstack-recommendations__button",
+  ".ss-heading":".smartstack-recommendations__title",
+  ".ss-vendor":".smartstack-recommendations__vendor",
+  ".ss-detail":".smartstack-recommendations__detail",
+};
+const CSS_PROPERTIES=new Set([
+  "color","background-color","border-color","border-width","border-radius",
+  "font-size","font-weight","font-style","line-height","letter-spacing",
+  "text-align","text-decoration","text-transform","padding","margin",
+  "opacity","max-width","max-height","object-fit","box-shadow"
+]);
+export function compileScopedCss(kind:DesignKind,input:string):string{
+  if(!input.trim())return "";
+  if(input.length>2400 || /@|\/\*|\*\/|url\s*\(|expression\s*\(|var\s*\(/i.test(input)){
+    throw Error("Custom CSS allows simple component declarations only. Imports, URLs and variables are blocked.");
   }
-  function observeCard(block,item,element){
-    if(isEditor())return;
-    track(block,item,'render');
-    if(!('IntersectionObserver' in window))return;
-    let counted=false;
-    const observer=new IntersectionObserver(entries=>{
-      if(counted)return;
-      if(entries.some(entry=>entry.isIntersecting&&entry.intersectionRatio>=0.5)){
-        if(analyticsAllowed()){counted=true;track(block,item,'view');observer.disconnect();}
+  const regex=/([^{}]+)\{([^{}]*)\}/g;
+  const blocks=[...input.matchAll(regex)];
+  if(!blocks.length||blocks.length>12||input.replace(regex,"").trim()){
+    throw Error("CSS must use component aliases such as .ss-title { color: #333333; }");
+  }
+  const result=[];
+  for(const [,rawSelector,rawBody] of blocks){
+    const selector=rawSelector.trim(),mapped=CSS_ALIASES[selector];
+    if(!mapped)throw Error("Unsupported CSS selector: "+selector);
+    const declarations=rawBody.split(";").map(x=>x.trim()).filter(Boolean);
+    if(!declarations.length||declarations.length>18)throw Error("Each CSS rule needs 1–18 declarations.");
+    const clean=[];
+    for(const declaration of declarations){
+      const idx=declaration.indexOf(":");
+      if(idx<1)throw Error("Invalid CSS property.");
+      const property=declaration.slice(0,idx).trim().toLowerCase();
+      const value=declaration.slice(idx+1).trim();
+      if(!CSS_PROPERTIES.has(property)||!value||value.length>90||
+        /[{}<>\\@]|!important|url|expression|javascript|behavior|filter/i.test(value)||
+        !/^[\w\d\s#.,()%/+*-]+$/.test(value)){
+        throw Error("Unsupported or unsafe CSS declaration: "+property);
       }
-    },{threshold:[0.5]});
-    observer.observe(element);
-    // Theme editor replaces blocks; disconnect when the DOM node is removed.
-    const onRemove=()=>{if(!element.isConnected)observer.disconnect();};
-    document.addEventListener('shopify:section:unload',onRemove,{once:true});
+      clean.push(property+":"+value);
+    }
+    result.push('.smartstack-recommendations[data-block-kind="'+kind+'"][data-ss-custom-css="yes"] '+mapped+
+      '{'+clean.join(';')+'}');
   }
-  const isEditor = () => Boolean(window.Shopify?.designMode);
-  const create = (tag, cls, value) => {
-    const element = document.createElement(tag);
-    if (cls) element.className = cls;
-    if (value !== undefined && value !== null) element.textContent = String(value);
-    return element;
-  };
-  const onlyDigits = value => /^\d+$/.test(String(value ?? ''));
-  const validVariantId = value => {
-    if (!onlyDigits(value)) return false;
-    const numeric = Number(value);
-    return Number.isSafeInteger(numeric) && numeric > 0;
-  };
-  const safePath = value => {
-    try {
-      const url = new URL(String(value ?? ''), location.origin);
-      return url.origin === location.origin && /^https?:$/.test(url.protocol) ? url.pathname + url.search : null;
-    } catch { return null; }
-  };
-  const money = (minor, currency) => {
-    try {
-      return new Intl.NumberFormat(document.documentElement.lang || 'en-GB', {
-        style: 'currency', currency: currency || 'GBP'
-      }).format((Number(minor) || 0) / 100);
-    } catch { return ((Number(minor) || 0) / 100).toFixed(2); }
-  };
-  const cartRoot = () => {
-    const configured = window.Shopify?.routes?.root;
-    return typeof configured === 'string' && configured.startsWith('/') ? configured.replace(/\/?$/, '/') : '/';
-  };
-  const viewCart = () => cartRoot() + 'cart';
-
-  const presets = {
-    theme: {cardStyle:'minimal',imageFit:'contain',imageRatio:'square',showQuickAdd:false,buttonStyle:'match'},
-    minimal: {cardStyle:'minimal',imageFit:'contain',imageRatio:'square',showQuickAdd:false,buttonStyle:'text'},
-  };
-  const validEnum = (candidate,choices,fallback) => choices.includes(candidate) ? candidate : fallback;
-  const clamp = (value,min,max,fallback) => {
-    const num=Number(value);
-    return Number.isFinite(num)?Math.min(max,Math.max(min,Math.round(num))):fallback;
-  };
-  const cssHex = value => typeof value==='string' && /^#[0-9a-f]{6}$/i.test(value.trim());
-  const readableForeground = hex => {
-    if(!cssHex(hex))return '#fff';
-    const channels=[1,3,5].map(index=>parseInt(hex.slice(index,index+2),16)/255);
-    const linear=channels.map(c=>c<=0.04045?c/12.92:((c+0.055)/1.055)**2.4);
-    const luminance=0.2126*linear[0]+0.7152*linear[1]+0.0722*linear[2];
-    // WCAG relative-luminance threshold: choose the higher-contrast text.
-    return (luminance+0.05)/0.05 >= 1.05/(luminance+0.05)?'#111':'#fff';
-  };
-
-  function themeButtons() {
-    const selectors=[
-      'product-form button[type="submit"]',
-      '.product-form__submit',
-      'form[action*="/cart/add"] button[type="submit"]',
-      'button[name="add"]',
-      '.product__info-container .button'
-    ];
-    for(const selector of selectors){
-      const node=document.querySelector(selector);
-      if(node && !node.closest('[data-smartstack-block]')) return node;
-    }
-    return null;
-  }
-  const isOpaqueColor = value => typeof value==='string' &&
-    (/^#[0-9a-f]{3,8}$/i.test(value) || /^rgb\(/.test(value) || /^hsl\(/.test(value)) &&
-    !/rgba\([^)]+,\s*0(?:\.0+)?\)/.test(value) && value!=='transparent';
-
-  function getDesign(block,studio) {
-    const kind=block.dataset.blockKind || 'complement';
-    const source=block.dataset.styleSource === 'block' ? 'block' : 'studio';
-    const defaults=kind==='bought_together'?{layout:'compact'}:{layout:'grid'};
-    const base={...defaults,...presets.theme,
-      showHeading:true,showPrice:true,showVendor:false,desktopColumns:3,mobileColumns:2,
-      cardGap:16,cardRadius:8,bundleLayout:'list',headingAlign:'left',buttonColor:''};
-    const design=source==='studio' && studio && typeof studio==='object' ? {...base,...studio} : {
-      ...base,
-      layout:block.dataset.layout||'grid',
-      cardStyle:block.classList.contains('smartstack-recommendations--minimal')?'minimal':
-        block.classList.contains('smartstack-recommendations--soft')?'soft':'bordered',
-      imageRatio:block.dataset.imageRatio||'square',
-      imageFit:block.dataset.imageFit||'contain',
-      showQuickAdd:block.dataset.showQuickAdd!=='false',
-      showPrice:block.dataset.showPrice!=='false',
-      showVendor:block.dataset.showVendor==='true',
-      buttonStyle:block.dataset.buttonStyle||'match',
-      desktopColumns:block.style.getPropertyValue('--ss-cols').trim()||3,
-      mobileColumns:block.style.getPropertyValue('--ss-mobile-cols').trim()||2,
-      cardGap:parseFloat(block.style.getPropertyValue('--ss-gap'))||16,
-      cardRadius:parseFloat(block.style.getPropertyValue('--ss-radius'))||8,
-      buttonColor:block.style.getPropertyValue('--ss-accent').trim(),
-    };
-    const quick=block.dataset.quickAddOverride;
-    if(quick==='show') design.showQuickAdd=true;
-    if(quick==='hide') design.showQuickAdd=false;
-    const price=block.dataset.priceOverride;
-    if(price==='show') design.showPrice=true;
-    if(price==='hide') design.showPrice=false;
-    design.layout=validEnum(design.layout,['grid','carousel','compact'],base.layout);
-    design.cardStyle=validEnum(design.cardStyle,['minimal','bordered','soft'],'minimal');
-    design.imageFit=validEnum(design.imageFit,['contain','cover'],'contain');
-    design.imageRatio=validEnum(design.imageRatio,['square','portrait','landscape'],'square');
-    design.buttonStyle=validEnum(design.buttonStyle,['match','solid','outline','text'],'match');
-    design.bundleLayout=validEnum(design.bundleLayout,['list','cards'],'list');
-    design.headingAlign=validEnum(design.headingAlign,['left','center'],'left');
-    design.cardGap=clamp(design.cardGap,8,32,16);
-    design.cardRadius=clamp(design.cardRadius,0,24,8);
-    design.desktopColumns=clamp(design.desktopColumns,2,4,3);
-    design.mobileColumns=clamp(design.mobileColumns,1,2,2);
-    return design;
-  }
-
-  function applyDesign(block,design) {
-    block.__ssDesign=design;
-    block.dataset.ssCardStyle=design.cardStyle;
-    block.dataset.ssHover=design.hoverEffect||"none";
-    block.dataset.ssShadow=design.shadow||"none";
-    block.dataset.ssTextAlign=design.textAlign||"left";
-    block.dataset.ssButtonStyle=design.buttonStyle;
-    block.dataset.ssPreset=design.preset||'theme';
-    block.style.setProperty('--ss-gap',design.cardGap+'px');
-    block.style.setProperty('--ss-radius',design.cardRadius+'px');
-    block.style.setProperty('--ss-border-width',Math.max(0,Math.min(3,Number(design.borderWidth)||0))+'px');
-    block.style.setProperty('--ss-card-padding',Math.max(0,Math.min(32,Number(design.cardPadding)||0))+'px');
-    block.style.setProperty('--ss-image-max',Math.max(80,Math.min(600,Number(design.imageMaxHeight)||440))+'px');
-    block.style.setProperty('--ss-card-background',design.cardBackground||'transparent');
-    block.style.setProperty('--ss-border-color',design.borderColor||'rgba(110,116,129,.22)');
-    block.style.setProperty('--ss-title-color',design.titleColor||'inherit');
-    block.style.setProperty('--ss-price-color',design.priceColor||'inherit');
-    block.style.setProperty('--ss-button-width',design.buttonFullWidth===false?'auto':'100%');
-    // Match the four-column product shelf used by the merchant's theme.
-    // Narrow app placements still switch layouts through container queries.
-    block.style.setProperty('--ss-cols',String(
-      design.preset==='theme' && block.dataset.styleSource!=='block'
-        ? 4 : design.desktopColumns
-    ));
-    block.style.setProperty('--ss-mobile-cols',String(design.mobileColumns));
-    block.style.setProperty('--ss-image-ratio',
-      design.imageRatio==='portrait'?'4 / 5':design.imageRatio==='landscape'?'4 / 3':'1 / 1');
-    block.style.setProperty('--ss-image-fit',design.imageFit);
-    // Read computed styles from real theme product cards, rather than using
-    // rem sizes that can shrink to 9px on Shopify's 10px-root themes.
-    const references=[
-      ['.related-products h2, .related-products__heading','--ss-heading-size',18,36],
-      ['.related-products .card__heading, .product-grid .card__heading','--ss-card-title-size',13,20],
-      ['.related-products .price-item, .product-grid .price-item','--ss-price-size',13,20]
-    ];
-    for(const [selector,property,min,max] of references){
-      const node=document.querySelector(selector);
-      if(!node||node.closest('[data-smartstack-block]'))continue;
-      const computed=getComputedStyle(node);
-      const px=parseFloat(computed.fontSize);
-      if(Number.isFinite(px))block.style.setProperty(property,
-        Math.max(min,Math.min(max,px))+'px');
-      if(property==='--ss-heading-size'){
-        block.style.setProperty('--ss-heading-font',computed.fontFamily);
-        block.style.setProperty('--ss-heading-weight',computed.fontWeight);
-        block.style.setProperty('--ss-heading-line-height',computed.lineHeight);
-        block.style.setProperty('--ss-heading-letter-spacing',computed.letterSpacing);
-      }else if(property==='--ss-card-title-size'){
-        block.style.setProperty('--ss-card-font',computed.fontFamily);
-        block.style.setProperty('--ss-card-title-weight',computed.fontWeight);
-      }else if(property==='--ss-price-size'){
-        block.style.setProperty('--ss-price-weight',computed.fontWeight);
-      }
-    }
-    if(design.headingFontSize>0)block.style.setProperty('--ss-heading-size',design.headingFontSize+'px');
-    if(design.titleFontSize>0)block.style.setProperty('--ss-card-title-size',design.titleFontSize+'px');
-    if(design.priceFontSize>0)block.style.setProperty('--ss-price-size',design.priceFontSize+'px');
-    if(design.headingFontWeight>0)block.style.setProperty('--ss-heading-weight',String(design.headingFontWeight));
-    if(design.titleFontWeight>0)block.style.setProperty('--ss-card-title-weight',String(design.titleFontWeight));
-    if(design.priceFontWeight>0)block.style.setProperty('--ss-price-weight',String(design.priceFontWeight));
-    block.style.setProperty('--ss-heading-italic',design.headingItalic?'italic':'normal');
-    block.style.setProperty('--ss-title-italic',design.titleItalic?'italic':'normal');
-    block.style.setProperty('--ss-price-italic',design.priceItalic?'italic':'normal');
-    if(design.headingColor)block.style.setProperty('--ss-heading-color',design.headingColor);
-    if(design.preset==='theme' && block.dataset.styleSource!=='block'){
-      const nativeGrid=document.querySelector('.related-products .grid, .related-products .product-grid');
-      if(nativeGrid){
-        const gap=parseFloat(getComputedStyle(nativeGrid).columnGap);
-        if(Number.isFinite(gap) && gap>=8 && gap<=36){
-          block.style.setProperty('--ss-gap',gap+'px');
-        }
-      }
-      const nativeMedia=document.querySelector('.related-products .card__media');
-      if(nativeMedia){
-        const nativeStyle=getComputedStyle(nativeMedia);
-        block.style.setProperty('--ss-media-bg',nativeStyle.backgroundColor);
-      }
-    }
-
-    let bg='#24252a',fg='#fff',radius=design.cardRadius+'px',size='14px',border='transparent';
-    const buyButton=themeButtons();
-    if(buyButton){
-      const style=getComputedStyle(buyButton);
-      if(isOpaqueColor(style.backgroundColor))bg=style.backgroundColor;
-      else if(style.backgroundColor==='transparent' || /rgba\([^)]*,\s*0(?:\.0+)?\)/.test(style.backgroundColor)){
-        // Many Shopify product forms use transparent Add to Cart buttons with
-        // borders drawn by theme CSS. Keep them outlined instead of invisible.
-        bg='transparent';
-        border=isOpaqueColor(style.borderTopColor) && parseFloat(style.borderTopWidth)>0
-          ? style.borderTopColor : (style.color||'#24252a');
-      }
-      if(isOpaqueColor(style.color)) fg=style.color;
-      if(style.borderRadius && style.borderRadius!=='0px') radius=style.borderRadius;
-      if(style.fontSize) size=style.fontSize;
-      if(isOpaqueColor(style.borderTopColor) && style.borderTopWidth!=='0px')border=style.borderTopColor;
-    }
-    if(cssHex(design.buttonColor)) {
-      bg=design.buttonColor;
-      fg=readableForeground(bg);
-    }
-    block.style.setProperty('--ss-button-bg',bg);
-    block.style.setProperty('--ss-button-fg',fg);
-    block.style.setProperty('--ss-button-border',border);
-    block.style.setProperty('--ss-button-outline',isOpaqueColor(bg)?bg:fg);
-    block.style.setProperty('--ss-button-radius',radius);
-    block.style.setProperty('--ss-button-size',size);
-    const header=block.querySelector('.smartstack-recommendations__head');
-    if(header)header.dataset.align=design.headingAlign;
-  }
-
-
-  function showStatus(block, message) {
-    const status = block.querySelector('.smartstack-recommendations__status');
-    const content = block.querySelector('.smartstack-recommendations__content');
-    if (content) content.hidden = true;
-    if (!isEditor()) {
-      block.hidden = true;
-      if (status) status.hidden = true;
-      return;
-    }
-    block.hidden = false;
-    if (status) { status.textContent = message; status.hidden = false; }
-  }
-
-  async function addToCart(items) {
-    const valid = items.every(item => validVariantId(item.id) && Number(item.quantity) > 0);
-    if (!valid) throw new Error('One of the products needs a variant selection');
-    const response = await fetch(cartRoot() + 'cart/add.js', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-      body: JSON.stringify({items: items.map(item => ({
-        id: Number(item.id), quantity: Math.max(1, Math.floor(Number(item.quantity))),
-        ...(analyticsAllowed() && typeof item.trackingRef==='string' &&
-          item.trackingRef.startsWith('ss1.')?
-          {properties:{_smartstack_ref:item.trackingRef}}:{})
-      }))})
-    });
-    if (!response.ok) {
-      const payload = await response.json().catch(() => ({}));
-      throw new Error(typeof payload.description === 'string'
-        ? payload.description.slice(0, 160)
-        : 'Could not add the selected products');
-    }
-    document.dispatchEvent(new CustomEvent('smartstack:cart-updated', { bubbles: true }));
-    document.dispatchEvent(new CustomEvent('cart:refresh', { bubbles: true }));
-  }
-
-  function feedback(container, text, withCartLink = false) {
-    container.replaceChildren();
-    const status = create('p', 'smartstack-recommendations__cart-feedback', text);
-    status.setAttribute('role', 'status');
-    if (withCartLink) {
-      status.append(' ');
-      const link = create('a', '', 'View basket');
-      link.href = viewCart();
-      status.append(link);
-    }
-    container.append(status);
-  }
-
-  // Use the verified Shopify-synced variants rather than assuming the
-  // product's first variant is what the customer intends to buy.
-  function variantOptions(item) {
-    return Array.isArray(item.variants)
-      ? item.variants.filter(v => validVariantId(v.id)) : [];
-  }
-  function variantName(variant) {
-    const values=Array.isArray(variant.options)
-      ? variant.options.filter(v => v && v.name && v.value && v.value !== 'Default Title')
-        .map(v=>v.name+': '+v.value) : [];
-    return values.length ? values.join(' · ') : variant.title||'Default';
-  }
-  function variantChoice(item,select,link) {
-    const options=variantOptions(item);
-    if(item.variantsComplete===false) return '';
-    if(select) return select.value || '';
-    if(options.length===1) return options[0].id;
-    if(options.length===0 && validVariantId(item.variantId))return item.variantId;
-    return '';
-  }
-  function makeVariantSelect(item,onSelect) {
-    const choices=variantOptions(item);
-    if(item.variantsComplete===false || choices.length<=1)return null;
-    const selector=create('select','smartstack-recommendations__variant-select');
-    selector.setAttribute('aria-label','Choose options for '+(item.title||'product'));
-    const prompt=create('option','','Select options');
-    prompt.value='';
-    selector.append(prompt);
-    for(const choice of choices){
-      const node=create('option','',variantName(choice));
-      node.value=choice.id;
-      selector.append(node);
-    }
-    selector.addEventListener('change',()=>onSelect?.(choices.find(v=>v.id===selector.value)||null));
-    return selector;
-  }
-
-  function makeCard(item, block) {
-    const href=safePath(item.url);
-    if(!href)return null;
-    const article=create('article','smartstack-recommendations__item');
-    const design=block.__ssDesign||{};
-    const media=create('a','smartstack-recommendations__media');
-    media.href=href;
-    media.addEventListener('click',()=>track(block,item,'click'));
-    media.setAttribute('aria-label','View '+(item.title||'product'));
-    if(item.imageUrl){
-      const image=create('img','smartstack-recommendations__photo');
-      image.src=String(item.imageUrl);
-      image.alt=item.title||'Product';image.loading='lazy';image.decoding='async';
-      media.append(image);
-    }else media.append(create('div','smartstack-recommendations__image-fallback','Image coming soon'));
-    if(design.showImage!==false)article.append(media);
-    const detail=create('div','smartstack-recommendations__detail');
-    const link=create('a','smartstack-recommendations__product-link');
-    link.href=href;
-    link.addEventListener('click',()=>track(block,item,'click'));
-    if(design.showTitle!==false){
-      link.append(create('h3','smartstack-recommendations__product-name',item.title||'Product'));
-      detail.append(link);
-    }
-    if(design.showVendor&&item.vendor)detail.prepend(create('span','smartstack-recommendations__vendor',item.vendor));
-    const price=design.showPrice!==false && item.priceFormatted
-      ?create('p','smartstack-recommendations__price',item.priceFormatted):null;
-    if(price)detail.append(price);
-    if(design.showQuickAdd){
-      const feedbackArea=create('div','');
-      const select=makeVariantSelect(item,variant=>{
-        if(price && variant)price.textContent=money(variant.priceMinor,item.currencyCode);
-        button.textContent=variant?'Add to basket':'Choose options';
-        button.disabled=false;
-      });
-      if(select)detail.append(select);
-      const button=create('button','smartstack-recommendations__button','');
-      button.type='button';
-      const canChoose=Boolean(select);
-      const initial=variantChoice(item,select);
-      button.textContent=initial?'Add to basket':canChoose?'Choose options':'View options';
-      button.addEventListener('click',async()=>{
-        const chosen=variantChoice(item,select);
-        if(!chosen){
-          if(!canChoose){track(block,item,'click');location.href=href;}
-          else feedback(feedbackArea,'Select the product options above.');
-          return;
-        }
-        button.disabled=true;button.textContent='Adding…';
-        try{
-          await addToCart([{id:chosen,quantity:1,trackingRef:item.trackingRef}]);
-          track(block,item,'add');
-          button.textContent='Added ✓';
-          feedback(feedbackArea,'Added to your basket.',true);
-        }catch(error){
-          button.textContent='Try again';
-          feedback(feedbackArea,error instanceof Error?error.message:'Please try again');
-        }finally{button.disabled=false;}
-      });
-      detail.append(button,feedbackArea);
-    }
-    article.append(detail);
-    observeCard(block,item,article);
-    return article;
-  }
-
-  function makeCardCollection(block, items) {
-    const grid = create('div', 'smartstack-recommendations__products');
-    let layout = block.__ssDesign?.layout || 'grid';
-    // Previously 'Bought together' defaulted to a narrow list, even when
-    // placed as a full-width shelf. Match the native product grid on wide rows.
-    const hostWidth=block.getBoundingClientRect().width ||
-      block.parentElement?.getBoundingClientRect().width || 0;
-    if(layout==='compact' && block.__ssDesign?.preset==='theme'
-      && hostWidth>=700){
-      layout='grid';
-    }
-    grid.dataset.layout = layout;
-    for (const item of items) {
-      if (!item.available) continue;
-      const card = makeCard(item, block);
-      if (card) grid.append(card);
-    }
-    return grid;
-  }
-
-  function selectedVariant(block, fallback) {
-    // Merchants' themes generally update their product form variant input.
-    // Read it at click time so bundle add-to-cart does not use a stale source variant.
-    const form = document.querySelector('form[action*="/cart/add"] input[name="id"]');
-    if (form && validVariantId(form.value)) return form.value;
-    const liquidVariant = block.dataset.sourceVariantId;
-    return validVariantId(liquidVariant) ? liquidVariant : fallback;
-  }
-
-  function makeBundle(block,data) {
-    const source=data.source;
-    if(!source)return null;
-    const candidates=(data.items||[]).filter(item=>item.available &&
-      item.variantsComplete!==false &&
-      (variantOptions(item).length>0||validVariantId(item.variantId))).slice(0,7);
-    if(!candidates.length)return null;
-    const wrap=create('div','smartstack-recommendations__bundle');
-    wrap.dataset.layout=block.__ssDesign?.bundleLayout==='cards'?'cards':'list';
-    const list=create('div','smartstack-recommendations__bundle-list');
-    const selected=new Set(candidates.map(item=>String(item.id)));
-    const selectors=new Map();
-    const priceNodes=new Map();
-    const note=create('div','');
-    const add=create('button','smartstack-recommendations__button','Add selected set to basket');
-    add.type='button';
-    const totalValue=create('strong','smartstack-recommendations__bundle-total');
-
-    function currentSelection(item,original=false){
-      if(original){
-        const selectedId=selectedVariant(block,source.variantId);
-        return variantOptions(item).find(v=>v.id===selectedId)||
-          (variantOptions(item).length===1?variantOptions(item)[0]:null);
-      }
-      const selector=selectors.get(item.id);
-      const id=variantChoice(item,selector);
-      return variantOptions(item).find(v=>v.id===id)||
-        (validVariantId(id)?{id,priceMinor:item.priceMinor}:null);
-    }
-    function makeRow(item,original) {
-      const row=create('div','smartstack-recommendations__bundle-row');
-      if(!original)observeCard(block,item,row);
-      const tick=create('input');
-      tick.type='checkbox';tick.checked=true;
-      if(original){
-        tick.disabled=true;
-        tick.setAttribute('aria-label','Current product included in the set');
-      }else{
-        tick.setAttribute('aria-label','Include '+item.title);
-        tick.addEventListener('change',()=>{
-          if(tick.checked)selected.add(String(item.id));
-          else selected.delete(String(item.id));
-          update();
-        });
-      }
-      row.append(tick);
-      if(item.imageUrl){
-        const picture=create('img');
-        picture.src=String(item.imageUrl);
-        picture.alt=item.title||'Product';picture.loading='lazy';
-        row.append(picture);
-      }else row.append(create('span','smartstack-recommendations__image-fallback','No image'));
-      const info=create('div','smartstack-recommendations__bundle-info');
-      const title=create('a','',item.title||'Product');
-      title.href=safePath(item.url)||'#';
-      if(!original)title.addEventListener('click',()=>track(block,item,'click'));
-      info.append(title);
-      if(original)info.append(create('small','','Current product · options selected above'));
-      else{
-        const chooser=makeVariantSelect(item,update);
-        if(chooser){selectors.set(item.id,chooser);info.append(chooser);}
-      }
-      row.append(info);
-      const price=create('strong','smartstack-recommendations__bundle-price',
-        money(item.priceMinor,item.currencyCode||source.currencyCode));
-      priceNodes.set(item.id,price);
-      row.append(price);
-      return row;
-    }
-    list.append(makeRow(source,true));
-    candidates.forEach(item=>list.append(makeRow(item,false)));
-    wrap.append(list);
-    const summary=create('div','smartstack-recommendations__bundle-summary');
-    summary.append(create('span','','Set total'),totalValue);
-    wrap.append(summary);
-    const discountNote=create('p','smartstack-recommendations__bundle-note',
-      'No bundle discount is active. Prices are estimates until Shopify confirms your basket.');
-    wrap.append(add,discountNote,note);
-
-    function update(){
-      const chosen=candidates.filter(item=>selected.has(String(item.id)));
-      const sourceOption=currentSelection(source,true);
-      let canAdd=validVariantId(selectedVariant(block,source.variantId));
-      let total=Number(sourceOption?.priceMinor??source.priceMinor)||0;
-      const sourcePrice=priceNodes.get(source.id);
-      if(sourcePrice)sourcePrice.textContent=money(total,source.currencyCode);
-      for(const item of candidates){
-        const variant=currentSelection(item);
-        const price=priceNodes.get(item.id);
-        if(price && variant)price.textContent=money(variant.priceMinor,item.currencyCode);
-        if(selected.has(String(item.id))){
-          if(!variant||!validVariantId(variant.id)) canAdd=false;
-          total+=Number(variant?.priceMinor??item.priceMinor)||0;
-        }
-      }
-      totalValue.textContent=money(total,source.currencyCode);
-      canAdd=canAdd&&chosen.length>0;
-      add.disabled=!canAdd;
-      add.textContent=!chosen.length?'Select at least one add-on':
-        !canAdd?'Choose options for selected products':
-        'Add '+(chosen.length+1)+' items to basket';
-    }
-    add.addEventListener('click',async()=>{
-      const chosen=candidates.filter(item=>selected.has(String(item.id)));
-      const variantIds=[selectedVariant(block,source.variantId),
-        ...chosen.map(item=>currentSelection(item)?.id||'')];
-      if(variantIds.length<2||variantIds.some(id=>!validVariantId(id))){
-        feedback(note,'Please choose all required options first.');
-        return;
-      }
-      add.disabled=true;add.textContent='Adding set…';
-      try{
-        await addToCart(variantIds.map((id,index)=>({
-          id,quantity:1,trackingRef:index===0?null:chosen[index-1].trackingRef
-        })));
-        for(const item of chosen)track(block,item,'add');
-        add.textContent='Added to basket ✓';
-        feedback(note,'Your selected set was added.',true);
-      }catch(error){
-        feedback(note,error instanceof Error?error.message:'Unable to add set');
-      }finally{update();}
-    });
-    const form=document.querySelector('form[action*="/cart/add"]');
-    const sourceInput=form?.querySelector('input[name="id"]');
-    if(sourceInput){
-      sourceInput.addEventListener('change',update);
-      // Themes may emit variant-specific events on select changes.
-      form.addEventListener('change',()=>requestAnimationFrame(update));
-    }
-    update();
-    return wrap;
-  }
-
-  async function render(block, force = false) {
-    const id = block.dataset.productId;
-    if (!onlyDigits(id)) return;
-    const kind = block.dataset.blockKind || 'complement';
-    const signature = [
-      id,kind,block.dataset.maxItems,block.dataset.heading,block.dataset.layout,
-      block.dataset.showQuickAdd,block.dataset.sourceVariantId,
-      block.dataset.styleSource,block.dataset.quickAddOverride,block.dataset.priceOverride,
-      block.dataset.imageRatio,block.dataset.imageFit,block.dataset.buttonStyle
-    ].join('|');
-    if (!force && states.get(block) === signature) return;
-    states.set(block,signature);
-    showStatus(block,'Loading recommendation preview…');
-    try {
-      const root = block.dataset.proxyPath || '/apps/smartstack';
-      if (!/^\/(?!\/)[a-zA-Z0-9/_-]+$/.test(root)) throw new Error('Invalid app proxy path');
-      const url = new URL(root.replace(/\/$/, '') + '/recommendations',location.origin);
-      url.searchParams.set('product_id',id);
-      url.searchParams.set('kind',kind);
-      url.searchParams.set('max',block.dataset.maxItems || '3');
-      const response = await fetch(url,{
-        credentials:'same-origin',
-        headers:{'Accept':'application/json','ngrok-skip-browser-warning':'1'}
-      });
-      if (!response.ok) throw new Error('App proxy returned HTTP ' + response.status);
-      const type = response.headers.get('content-type') || '';
-      if (!type.includes('json')) throw new Error('App proxy returned HTML instead of recommendations');
-      const data = await response.json();
-      if (states.get(block) !== signature) return;
-      if (!data || !Array.isArray(data.items)) throw new Error('Unexpected recommendation response');
-      const design=getDesign(block,data.design);
-      applyDesign(block,design);
-      const existingCss=block.querySelector('style[data-smartstack-custom-css]');
-      if(existingCss)existingCss.remove();
-      const useCustomCss=block.dataset.styleSource!=='block' &&
-        typeof data.customCss==='string' && data.customCss.length<6000 &&
-        Boolean(data.customCss);
-      block.dataset.ssCustomCss=useCustomCss?'yes':'no';
-      if(useCustomCss){
-        const style=document.createElement('style');
-        style.dataset.smartstackCustomCss='1';
-        style.textContent=data.customCss;
-        block.append(style);
-      }
-
-      const valid = data.items.filter(item => item.available && safePath(item.url));
-      const body = block.querySelector('.smartstack-recommendations__body');
-      const content = block.querySelector('.smartstack-recommendations__content');
-      const status = block.querySelector('.smartstack-recommendations__status');
-      const heading = block.querySelector('.smartstack-recommendations__title');
-      if (!body || !content || !heading) return;
-
-      const chosen = kind === 'bundle' ? makeBundle(block,data) : makeCardCollection(block,valid);
-      if (!chosen || (kind !== 'bundle' && !chosen.children.length)) {
-        showStatus(block, (data.warning || 'No eligible recommendations for this product.') +
-          ' Try another preview product or adjust your SmartStack matching rules.');
-        return;
-      }
-      const customHeading = String(block.dataset.heading || '').trim();
-      // Legacy app blocks were saved with "Pairs perfectly with" regardless of type.
-      const legacyDefault = customHeading === 'Pairs perfectly with' && kind !== 'complement';
-      const unverifiedPairHeading = kind === 'bought_together' && data.basis !== 'order_history'
-        && /^(frequently|often) bought together$/i.test(customHeading);
-      heading.textContent = customHeading && !legacyDefault && !unverifiedPairHeading
-        ? customHeading : (data.heading || 'Recommended products');
-      const head=block.querySelector('.smartstack-recommendations__head');
-      if(head)head.hidden=design.showHeading===false;
-      body.replaceChildren(chosen);
-      content.hidden = false;
-      if (status) status.hidden = true;
-      block.hidden = false;
-    } catch (error) {
-      if (states.get(block) !== signature) return;
-      showStatus(block, 'SmartStack preview unavailable: ' +
-        (error instanceof Error ? error.message : 'check app proxy connection'));
-    }
-  }
-
-  function scan(root, force=false) {
-    if (root?.matches?.('[data-smartstack-block]')) render(root,force);
-    root?.querySelectorAll?.('[data-smartstack-block]').forEach(block => render(block,force));
-  }
-  const onSectionLoad = event => scan(event.target);
-  const onBlockSelect = event => scan(event.target,true);
-  const onReady = () => scan(document);
-
-  document.addEventListener('shopify:section:load',onSectionLoad);
-  document.addEventListener('shopify:block:select',onBlockSelect);
-  document.addEventListener('DOMContentLoaded',onReady);
-  let observer = null;
-  if (isEditor() && window.MutationObserver) {
-    observer = new MutationObserver(changes => {
-      changes.forEach(change => change.addedNodes.forEach(node => {
-        if (node.nodeType === 1) scan(node);
-      }));
-    });
-    observer.observe(document.documentElement,{childList:true,subtree:true});
-  }
-  if (document.readyState !== 'loading') onReady();
-
-  window.__smartstackRenderer = {
-    version: PREVIEW_VERSION,
-    scan: () => scan(document,true),
-    dispose() {
-      observer?.disconnect();
-      document.removeEventListener('shopify:section:load',onSectionLoad);
-      document.removeEventListener('shopify:block:select',onBlockSelect);
-      document.removeEventListener('DOMContentLoaded',onReady);
-    }
-  };
-})();
+  return result.join("\n");
+}
