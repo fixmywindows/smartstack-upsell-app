@@ -420,8 +420,7 @@ export default function SetEditor(){
             selected={sourceProductIds} onChange={setSourceProductIds}/>}
           {sourceMatch==="rules"&&<RuleGroups label="Trigger conditions" groups={sourceGroups}
             onChange={setSourceGroups} outerLogic={sourceLogic} setOuterLogic={setSourceLogic}
-            keys={data.metafieldKeys} categories={data.categories} remaining={freeSlots}
-            allocate={targetMode==="allocate"} maxCapacity={cap}/>}
+            keys={data.metafieldKeys} categories={data.categories} remaining={freeSlots}/>}
           {sourceMatch==="all"&&<p style={{...muted,background:"#f7f7f9",padding:12,borderRadius:7}}>
             This set is a general fallback. Give more specific sets a smaller priority number.</p>}
         </section>
@@ -455,7 +454,8 @@ export default function SetEditor(){
           </label>
           <RuleGroups label="Recommended product conditions" groups={targetGroups} onChange={setTargetGroups}
             outerLogic={targetLogic} setOuterLogic={setTargetLogic} keys={data.metafieldKeys}
-            categories={data.categories} remaining={freeSlots}/>
+            categories={data.categories} remaining={freeSlots}
+            allocate={targetMode==="allocate"} maxCapacity={cap}/>
           <label style={{...labelStyle,marginTop:18}}>Exclude products carrying these tags
             <input name="excludeTags" style={{...selectStyle,marginTop:6}} value={excludeTags}
               onChange={e=>setExcludeTags(e.target.value)} placeholder="clearance, discontinued"/>
