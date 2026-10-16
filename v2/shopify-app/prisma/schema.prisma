@@ -57,6 +57,7 @@ model ProductSnapshot {
   collections     Json
   metafields      Json
   variantId       String?
+  variantsComplete Boolean @default(true)
   imageUrl        String?
   priceMinor      Int      @default(0)
   currencyCode    String   @default("GBP")
