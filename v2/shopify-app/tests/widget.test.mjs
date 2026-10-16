@@ -80,5 +80,5 @@ test('every storefront block has an eight-product cap, with bundle source includ
   const limit = setting('max_items');
   assert.equal(limit.max,8);
   assert.equal(limit.default,8);
-  assert.match(js,/\.slice\(0, 7\)/);
+  assert.match(js,/\.slice\(0,\s*7\)/);
 });
