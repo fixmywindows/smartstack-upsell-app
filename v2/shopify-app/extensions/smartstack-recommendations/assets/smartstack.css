@@ -402,3 +402,32 @@
   .smartstack-recommendations__photo { transition: none; }
   .smartstack-recommendations__media:hover .smartstack-recommendations__photo { transform: none; }
 }
+
+
+/* Variant controls use theme typography while keeping a usable touch target. */
+.smartstack-recommendations__variant-select {
+  display:block;
+  width:100%;
+  min-height:39px;
+  min-width:0;
+  margin:5px 0;
+  padding:7px 28px 7px 10px;
+  font-family:inherit;
+  font-size:max(13px,.88em);
+  font-weight:inherit;
+  line-height:1.35;
+  color:inherit;
+  background-color:transparent;
+  border:1px solid rgba(110,116,129,.45);
+  border-radius:min(var(--ss-radius),9px);
+  cursor:pointer;
+  text-overflow:ellipsis;
+}
+.smartstack-recommendations__variant-select:focus-visible{
+  outline:2px solid currentColor;
+  outline-offset:2px;
+}
+.smartstack-recommendations__bundle-info .smartstack-recommendations__variant-select{
+  max-width:300px;
+  margin:5px 0 0;
+}
