@@ -15,11 +15,15 @@ export async function analyticsReport(shopDomain:string,scope:string|null|undefi
     where:{domain:shopDomain},select:{plan:true}
   });
   const plan=validPlan(shop.plan),paid=plan!=="free",orderConnected=hasOrderScope(scope);
+  const kindValue=url.searchParams.get("kind")||"all";
+  const selectedKind=["similar","complement","bought_together","bundle"].includes(kindValue)?
+    kindValue:"all";
+  const kindFilter=selectedKind==="all"?{}:{kind:selectedKind};
   const value=Number(url.searchParams.get("days"));
   const days=[7,30,90].includes(value)?value:30;
   const to=new Date(),from=new Date(to.getTime()-days*86400000);
-  const eventWhere={shopDomain,occurredAt:{gte:from,lte:to}};
-  const purchaseWhere={shopDomain,purchasedAt:{gte:from,lte:to}};
+  const eventWhere={shopDomain,...kindFilter,occurredAt:{gte:from,lte:to}};
+  const purchaseWhere={shopDomain,...kindFilter,purchasedAt:{gte:from,lte:to}};
   const [events,totals]=await Promise.all([
     db.recommendationEvent.groupBy({
       by:["type"],where:eventWhere,_count:{_all:true}
@@ -47,20 +51,20 @@ export async function analyticsReport(shopDomain:string,scope:string|null|undefi
     purchaseToViewRatio:percent(cards.reduce((n,x)=>n+x.purchaseLines,0),types.view||0),
     currencies:cards,
   };
-  if(!paid)return {plan,orderConnected,days,summary,advanced:null};
+  if(!paid)return {plan,orderConnected,days,selectedKind,summary,advanced:null};
   // Aggregate by day inside PostgreSQL (not by downloading individual events).
   const [dailyEvents,dailySales,topSold,views,clicks,bundleSales,pairs]=await Promise.all([
     db.$queryRaw<Array<{day:Date;type:string;count:bigint}>>(Prisma.sql`
       SELECT date_trunc('day',"occurredAt") AS day,"type",COUNT(*)::bigint AS count
       FROM "RecommendationEvent"
-      WHERE "shopDomain"=${shopDomain} AND "occurredAt">=${from} AND "occurredAt"<=${to}
+      WHERE "shopDomain"=${shopDomain} AND "occurredAt">=${from} AND "occurredAt"<=${to} AND (${selectedKind}='all' OR "kind"=${selectedKind})
       GROUP BY 1,2 ORDER BY 1
     `),
     db.$queryRaw<Array<{day:Date;currencyCode:string;quantity:bigint;revenue:bigint}>>(Prisma.sql`
       SELECT date_trunc('day',"purchasedAt") AS day,"currencyCode",
         SUM("quantity")::bigint AS quantity,SUM("netRevenueMinor")::bigint AS revenue
       FROM "RecommendationPurchase"
-      WHERE "shopDomain"=${shopDomain} AND "purchasedAt">=${from} AND "purchasedAt"<=${to}
+      WHERE "shopDomain"=${shopDomain} AND "purchasedAt">=${from} AND "purchasedAt"<=${to} AND (${selectedKind}='all' OR "kind"=${selectedKind})
       GROUP BY 1,2 ORDER BY 1
     `),
     db.recommendationPurchase.groupBy({
@@ -151,7 +155,7 @@ export async function analyticsReport(shopDomain:string,scope:string|null|undefi
   }
   const ranked=(data:Map<string,number>)=>[...data].sort((a,b)=>b[1]-a[1])
     .slice(0,10).map(([name,count])=>({name,count}));
-  return {plan,orderConnected,days,summary,advanced:{
+  return {plan,orderConnected,days,selectedKind,summary,advanced:{
     daily:[...byDay.values()].sort((a,b)=>a.date.localeCompare(b.date)),
     selectedCurrency,currencies:cards.map(x=>x.currencyCode),
     topProducts,underperformers,
