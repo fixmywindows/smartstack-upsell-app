@@ -5,7 +5,7 @@ import { diffOrderPairs, eligibleOrderProducts, observedPairMap } from "./co-pur
 import { ensureShop } from "./catalogue.server";
 
 type Admin={graphql:(q:string,options?:{variables?:Record<string,unknown>})=>Promise<Response>};
-export type Scopes={scope:string|null};
+export type Scopes={scope?:string|null};
 type OrderNode={
   id:string;createdAt:string;cancelledAt:string|null;fullyPaid:boolean;test:boolean;
   lineItems:{pageInfo:{hasNextPage:boolean};
@@ -32,7 +32,7 @@ query SmartStackOrders($after: String, $query: String) {
 `;
 
 /** Shopify read_orders is opt-in. Never request it silently or claim consent. */
-export function hasOrderScope(scope:string|null):boolean {
+export function hasOrderScope(scope:string|null|undefined):boolean {
   return (scope||"").split(",").map(s=>s.trim()).includes("read_orders");
 }
 function orderKey(domain:string,id:string):string {
@@ -41,7 +41,6 @@ function orderKey(domain:string,id:string):string {
   return createHmac("sha256",secret).update(domain+"|"+id).digest("hex");
 }
 type Paired=[string,string];
-type Tx=Parameters<Parameters<typeof db.$transaction>[0]>[0]; // compatible transaction callback type
 
 /**
  * Idempotent order refresh. Diff the old and new distinct product pairs in one
@@ -102,7 +101,7 @@ export async function pruneOldObservations(shopDomain:string,cutoff:Date) {
       if(!current||current.placedAt>=cutoff)return;
       const ids=Array.isArray(current.productIds)?
         current.productIds.filter((x):x is string=>typeof x==="string"):[];
-      const {remove}=diffOrderPairs(ids,[]) as {remove:Paired[]};
+      const {remove}=diffOrderPairs(ids,[]) as unknown as {remove:Paired[]};
       for(const [productA,productB] of remove){
         await tx.observedProductPair.updateMany({
           where:{shopDomain,productA,productB,orderCount:{gt:0}},
@@ -117,7 +116,7 @@ export async function pruneOldObservations(shopDomain:string,cutoff:Date) {
 }
 
 export async function syncRecentOrderSignals(
-  admin:Admin,shopDomain:string,scope:string|null
+  admin:Admin,shopDomain:string,scope:string|null|undefined
 ) {
   if(!hasOrderScope(scope)){
     return {authorized:false,added:0,scanned:0,finished:false,
