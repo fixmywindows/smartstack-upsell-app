@@ -16,6 +16,11 @@ test("attribute API is shop-authenticated and never accepts an arbitrary shop pa
   assert.match(route,/listAttributeChoices\(session\.shop,/);
   assert.doesNotMatch(route,/searchParams\.get\("shop"\)/);
   assert.match(route,/private,no-store/);
+  assert.match(route,/collections\(first: 250/);
+  assert.match(route,/nodes \{ id handle title \}/);
+  assert.match(route,/listShopifyCollections\(admin,q\)/);
+  assert.match(route,/source:"shopify_collections"/);
+  assert.match(route,/using cached handles/);
 });
 
 test("catalogue faceting is parameterised, capped and scoped to ProductSnapshot",()=>{
