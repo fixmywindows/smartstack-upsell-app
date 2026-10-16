@@ -3,12 +3,53 @@
  * Each block initialises independently, including re-rendered theme-editor blocks.
  */
 (() => {
-  const PREVIEW_VERSION = '0.4.0';
+  const PREVIEW_VERSION = '0.6.0';
   const previous = window.__smartstackRenderer;
   if (previous?.version === PREVIEW_VERSION) { previous.scan(); return; }
   previous?.dispose?.();
 
   const states = new WeakMap();
+  // Do not collect behavioural data before Shopify confirms analytics consent.
+  // No cookies, IP addresses or customer identifiers are sent to SmartStack.
+  if(window.Shopify?.loadFeatures){
+    window.Shopify.loadFeatures([{name:'consent-tracking-api',version:'0.1'}],()=>{});
+  }
+  const analyticsAllowed=()=>{
+    try{return window.Shopify?.customerPrivacy?.analyticsProcessingAllowed?.()===true;}
+    catch{return false;}
+  };
+  function track(block,item,type){
+    if(isEditor()||!analyticsAllowed()||!item?.trackingRef||
+      !['render','view','click','add'].includes(type))return;
+    const ref=String(item.trackingRef);
+    if(ref.length>1000||!ref.startsWith('ss1.'))return;
+    const root=block.dataset.proxyPath||'/apps/smartstack';
+    if(!/^\/(?!\/)[a-zA-Z0-9/_-]+$/.test(root))return;
+    const eventId=window.crypto?.randomUUID?.();
+    if(!eventId)return;
+    fetch(root.replace(/\/$/,'')+'/events',{
+      method:'POST',credentials:'same-origin',keepalive:true,
+      headers:{'Content-Type':'application/json','Accept':'application/json',
+        'ngrok-skip-browser-warning':'1'},
+      body:JSON.stringify({eventId,type,trackingRef:ref,consented:true})
+    }).catch(()=>{});
+  }
+  function observeCard(block,item,element){
+    if(isEditor())return;
+    track(block,item,'render');
+    if(!('IntersectionObserver' in window))return;
+    let counted=false;
+    const observer=new IntersectionObserver(entries=>{
+      if(counted)return;
+      if(entries.some(entry=>entry.isIntersecting&&entry.intersectionRatio>=0.5)){
+        if(analyticsAllowed()){counted=true;track(block,item,'view');observer.disconnect();}
+      }
+    },{threshold:[0.5]});
+    observer.observe(element);
+    // Theme editor replaces blocks; disconnect when the DOM node is removed.
+    const onRemove=()=>{if(!element.isConnected)observer.disconnect();};
+    document.addEventListener('shopify:section:unload',onRemove,{once:true});
+  }
   const isEditor = () => Boolean(window.Shopify?.designMode);
   const create = (tag, cls, value) => {
     const element = document.createElement(tag);
@@ -125,10 +166,21 @@
   function applyDesign(block,design) {
     block.__ssDesign=design;
     block.dataset.ssCardStyle=design.cardStyle;
+    block.dataset.ssHover=design.hoverEffect||"none";
+    block.dataset.ssShadow=design.shadow||"none";
+    block.dataset.ssTextAlign=design.textAlign||"left";
     block.dataset.ssButtonStyle=design.buttonStyle;
     block.dataset.ssPreset=design.preset||'theme';
     block.style.setProperty('--ss-gap',design.cardGap+'px');
     block.style.setProperty('--ss-radius',design.cardRadius+'px');
+    block.style.setProperty('--ss-border-width',Math.max(0,Math.min(3,Number(design.borderWidth)||0))+'px');
+    block.style.setProperty('--ss-card-padding',Math.max(0,Math.min(32,Number(design.cardPadding)||0))+'px');
+    block.style.setProperty('--ss-image-max',Math.max(80,Math.min(600,Number(design.imageMaxHeight)||440))+'px');
+    block.style.setProperty('--ss-card-background',design.cardBackground||'transparent');
+    block.style.setProperty('--ss-border-color',design.borderColor||'rgba(110,116,129,.22)');
+    block.style.setProperty('--ss-title-color',design.titleColor||'inherit');
+    block.style.setProperty('--ss-price-color',design.priceColor||'inherit');
+    block.style.setProperty('--ss-button-width',design.buttonFullWidth===false?'auto':'100%');
     // Match the four-column product shelf used by the merchant's theme.
     // Narrow app placements still switch layouts through container queries.
     block.style.setProperty('--ss-cols',String(
@@ -165,6 +217,16 @@
         block.style.setProperty('--ss-price-weight',computed.fontWeight);
       }
     }
+    if(design.headingFontSize>0)block.style.setProperty('--ss-heading-size',design.headingFontSize+'px');
+    if(design.titleFontSize>0)block.style.setProperty('--ss-card-title-size',design.titleFontSize+'px');
+    if(design.priceFontSize>0)block.style.setProperty('--ss-price-size',design.priceFontSize+'px');
+    if(design.headingFontWeight>0)block.style.setProperty('--ss-heading-weight',String(design.headingFontWeight));
+    if(design.titleFontWeight>0)block.style.setProperty('--ss-card-title-weight',String(design.titleFontWeight));
+    if(design.priceFontWeight>0)block.style.setProperty('--ss-price-weight',String(design.priceFontWeight));
+    block.style.setProperty('--ss-heading-italic',design.headingItalic?'italic':'normal');
+    block.style.setProperty('--ss-title-italic',design.titleItalic?'italic':'normal');
+    block.style.setProperty('--ss-price-italic',design.priceItalic?'italic':'normal');
+    if(design.headingColor)block.style.setProperty('--ss-heading-color',design.headingColor);
     if(design.preset==='theme' && block.dataset.styleSource!=='block'){
       const nativeGrid=document.querySelector('.related-products .grid, .related-products .product-grid');
       if(nativeGrid){
@@ -233,7 +295,10 @@
       credentials: 'same-origin',
       headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
       body: JSON.stringify({items: items.map(item => ({
-        id: Number(item.id), quantity: Math.max(1, Math.floor(Number(item.quantity)))
+        id: Number(item.id), quantity: Math.max(1, Math.floor(Number(item.quantity))),
+        ...(analyticsAllowed() && typeof item.trackingRef==='string' &&
+          item.trackingRef.startsWith('ss1.')?
+          {properties:{_smartstack_ref:item.trackingRef}}:{})
       }))})
     });
     if (!response.ok) {
@@ -300,8 +365,10 @@
     const href=safePath(item.url);
     if(!href)return null;
     const article=create('article','smartstack-recommendations__item');
+    const design=block.__ssDesign||{};
     const media=create('a','smartstack-recommendations__media');
     media.href=href;
+    media.addEventListener('click',()=>track(block,item,'click'));
     media.setAttribute('aria-label','View '+(item.title||'product'));
     if(item.imageUrl){
       const image=create('img','smartstack-recommendations__photo');
@@ -309,13 +376,15 @@
       image.alt=item.title||'Product';image.loading='lazy';image.decoding='async';
       media.append(image);
     }else media.append(create('div','smartstack-recommendations__image-fallback','Image coming soon'));
-    article.append(media);
+    if(design.showImage!==false)article.append(media);
     const detail=create('div','smartstack-recommendations__detail');
     const link=create('a','smartstack-recommendations__product-link');
     link.href=href;
-    link.append(create('h3','smartstack-recommendations__product-name',item.title||'Product'));
-    detail.append(link);
-    const design=block.__ssDesign||{};
+    link.addEventListener('click',()=>track(block,item,'click'));
+    if(design.showTitle!==false){
+      link.append(create('h3','smartstack-recommendations__product-name',item.title||'Product'));
+      detail.append(link);
+    }
     if(design.showVendor&&item.vendor)detail.prepend(create('span','smartstack-recommendations__vendor',item.vendor));
     const price=design.showPrice!==false && item.priceFormatted
       ?create('p','smartstack-recommendations__price',item.priceFormatted):null;
@@ -336,13 +405,14 @@
       button.addEventListener('click',async()=>{
         const chosen=variantChoice(item,select);
         if(!chosen){
-          if(!canChoose) location.href=href;
+          if(!canChoose){track(block,item,'click');location.href=href;}
           else feedback(feedbackArea,'Select the product options above.');
           return;
         }
         button.disabled=true;button.textContent='Adding…';
         try{
-          await addToCart([{id:chosen,quantity:1}]);
+          await addToCart([{id:chosen,quantity:1,trackingRef:item.trackingRef}]);
+          track(block,item,'add');
           button.textContent='Added ✓';
           feedback(feedbackArea,'Added to your basket.',true);
         }catch(error){
@@ -353,6 +423,7 @@
       detail.append(button,feedbackArea);
     }
     article.append(detail);
+    observeCard(block,item,article);
     return article;
   }
 
@@ -416,6 +487,7 @@
     }
     function makeRow(item,original) {
       const row=create('div','smartstack-recommendations__bundle-row');
+      if(!original)observeCard(block,item,row);
       const tick=create('input');
       tick.type='checkbox';tick.checked=true;
       if(original){
@@ -439,6 +511,7 @@
       const info=create('div','smartstack-recommendations__bundle-info');
       const title=create('a','',item.title||'Product');
       title.href=safePath(item.url)||'#';
+      if(!original)title.addEventListener('click',()=>track(block,item,'click'));
       info.append(title);
       if(original)info.append(create('small','','Current product · options selected above'));
       else{
@@ -495,7 +568,10 @@
       }
       add.disabled=true;add.textContent='Adding set…';
       try{
-        await addToCart(variantIds.map(id=>({id,quantity:1})));
+        await addToCart(variantIds.map((id,index)=>({
+          id,quantity:1,trackingRef:index===0?null:chosen[index-1].trackingRef
+        })));
+        for(const item of chosen)track(block,item,'add');
         add.textContent='Added to basket ✓';
         feedback(note,'Your selected set was added.',true);
       }catch(error){
@@ -545,6 +621,18 @@
       if (!data || !Array.isArray(data.items)) throw new Error('Unexpected recommendation response');
       const design=getDesign(block,data.design);
       applyDesign(block,design);
+      const existingCss=block.querySelector('style[data-smartstack-custom-css]');
+      if(existingCss)existingCss.remove();
+      const useCustomCss=block.dataset.styleSource!=='block' &&
+        typeof data.customCss==='string' && data.customCss.length<6000 &&
+        Boolean(data.customCss);
+      block.dataset.ssCustomCss=useCustomCss?'yes':'no';
+      if(useCustomCss){
+        const style=document.createElement('style');
+        style.dataset.smartstackCustomCss='1';
+        style.textContent=data.customCss;
+        block.append(style);
+      }
 
       const valid = data.items.filter(item => item.available && safePath(item.url));
       const body = block.querySelector('.smartstack-recommendations__body');

@@ -229,3 +229,13 @@
 @media(max-width:680px){.ssr-home-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.ssr-home-panel{padding:15px}.ssr-home-next{grid-template-columns:30px 1fr}.ssr-home-next-button{grid-column:1/-1;text-align:center}.ssr-home-check{grid-template-columns:31px minmax(0,1fr)}.ssr-home-check>a{grid-column:2;justify-self:start}.ssr-home-hero{padding:21px}.ssr-home-recent-state{display:none}.ssr-home-art-row{font-size:10px}}
 @media(max-width:390px){.ssr-home-stats{gap:8px}.ssr-home-stat{padding:12px}.ssr-home-stat strong{font-size:22px}.ssr-home-art-row{flex-wrap:wrap}.ssr-home-recent-open{display:none}}
 @media(prefers-reduced-motion:reduce){.ssr-home *{transition:none!important;animation:none!important}.ssr-home-progress-track span{transition:none!important}}
+
+
+/* Allocation mode: TH﻿EN groups reserve visible shelf slots. */
+.ssr-group-limit{display:flex;align-items:center;gap:7px;color:#087e66;font-size:11px;font-weight:750;white-space:nowrap;}
+.ssr-group-limit .ssr-select{width:auto;min-width:103px;min-height:32px;border-color:#a4dacb;color:#087b65;background:#e9f9f3;font-weight:700;}
+.ssr-allocated-summary{background:linear-gradient(100deg,#e8f7f1,#f4f0ff);border:1px solid #cfe9dc;
+  border-radius:11px;padding:12px;font-size:12px;color:#285e55;line-height:1.5;}
+.ssr-allocated-summary strong{font-size:18px;color:#0a8b6e;}
+.ssr-allocated-summary span{display:block;color:#5f7a75;font-size:11px;margin-top:2px;}
+@media(max-width:620px){.ssr-group-limit{white-space:normal;}}

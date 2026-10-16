@@ -7,8 +7,9 @@ import { ensureShop } from "../services/catalogue.server";
 import { validPlan } from "../utils/plan-limits";
 import {
   DESIGN_KINDS, defaultDesign, normaliseDesign, presets, isAdvancedDesign,
-  canSaveDesign, type DesignKind, type DesignPreset, type DesignSettings,
+  canSaveDesign, compileScopedCss, type DesignKind, type DesignPreset, type DesignSettings,
 } from "../utils/design-settings";
+import { AdvancedDesignControls } from "../components/advanced-design-controls";
 
 const types=[
   {id:"similar",title:"Similar products"},
@@ -48,6 +49,8 @@ export const action=async({request}:ActionFunctionArgs)=>{
   try{value=JSON.parse(raw);}catch{return Response.json({error:"Invalid design configuration"},{status:400});}
   const shop=await ensureShop(session.shop);
   const settings=normaliseDesign(kind as DesignKind,value);
+  try{compileScopedCss(kind as DesignKind,settings.customCss);}
+  catch(error){return Response.json({error:error instanceof Error?error.message:"Invalid custom CSS"},{status:400});}
   if(!canSaveDesign(validPlan(shop.plan),settings,kind as DesignKind))return Response.json({
     error:"Advanced design controls are reserved for Growth and Insights. Choose Match my store or Minimal to save on Free."
   },{status:403});
@@ -91,9 +94,11 @@ export default function DesignStudio(){
     !(design.preset==="theme" && device==="desktop");
   const cardStyle:React.CSSProperties={
     minWidth:0,display:"flex",flexDirection:compact?"row":"column",
-    background:design.cardStyle==="soft"?"#f8f8f9":"white",
-    border:design.cardStyle==="minimal"?"0":"1px solid #e3e5eb",
-    borderRadius:design.cardRadius,overflow:"hidden"
+    background:design.cardBackground||(design.cardStyle==="soft"?"#f8f8f9":"white"),
+    border:design.cardStyle==="minimal"?"0":design.borderWidth+"px solid "+(design.borderColor||"#e3e5eb"),
+    borderRadius:design.cardRadius,overflow:"hidden",
+    textAlign:design.textAlign,boxShadow:design.shadow==="raised"?"0 8px 24px #25203420":
+      design.shadow==="subtle"?"0 3px 9px #25203413":"none"
   };
   return <s-page heading="Design Studio">
     <s-section heading="Make recommendations feel native to your store">
@@ -134,9 +139,13 @@ export default function DesignStudio(){
             {options("layout","How to display products",[
               ["grid","Responsive grid"],["carousel","Swipeable carousel"],["compact","Compact vertical list"]])}
             {toggle("showHeading","Show block heading")}
+            {toggle("showTitle","Show product names")}
+            {toggle("showImage","Show product images")}
             {toggle("showPrice","Show product prices")}
             {toggle("showVendor","Show brand / vendor")}
             {toggle("showQuickAdd","Display Add to Basket buttons")}
+            {options("cardStyle","Card border",[
+              ["minimal","No border"],["bordered","With border"],["soft","Soft background — Growth+"]])}
           </div>
           <div style={surface}>
             <button type="button" style={{...actionButton,width:"100%",display:"flex",justifyContent:"space-between"}}
@@ -166,6 +175,8 @@ export default function DesignStudio(){
               {design.buttonColor&&<button type="button" onClick={()=>set("buttonColor","")} style={actionButton}>
                 Restore automatic theme colour
               </button>}
+              <AdvancedDesignControls design={design}
+                onChange={(key,value)=>set(key,value as never)}/>
             </div>}
           </div>
           <Form method="post" style={surface}>
@@ -196,8 +207,9 @@ export default function DesignStudio(){
           <div style={{marginTop:16,padding:15,borderRadius:11,background:"#f0f1f4",overflowX:"auto"}}>
             <div style={{maxWidth:width,width:"100%",padding:device==="mobile"?12:22,
               background:"#fff",borderRadius:8,margin:"0 auto",boxSizing:"border-box"}}>
-              {design.showHeading&&<h3 style={{margin:"0 0 17px",fontSize:device==="mobile"?18:22,
-                fontWeight:650,textAlign:design.headingAlign}}>{types.find(t=>t.id===data.kind)?.title}</h3>}
+              {design.showHeading&&<h3 style={{margin:"0 0 17px",fontSize:design.headingFontSize||(device==="mobile"?18:22),
+                textAlign:design.headingAlign,fontWeight:design.headingFontWeight||650,fontStyle:design.headingItalic?"italic":"normal",
+                color:design.headingColor||"inherit"}}>{types.find(t=>t.id===data.kind)?.title}</h3>}
               {shown.length===0?<p style={small}>Sync some published products to see examples here.</p>:
                 data.kind==="bundle" ? <div style={{border:"1px solid #e1e4e9",borderRadius:design.cardRadius,padding:14}}>
                   <div style={{display:"grid",gap:9,gridTemplateColumns:design.bundleLayout==="cards"?
@@ -230,15 +242,21 @@ export default function DesignStudio(){
                 </div> :
                 <div style={{display:"grid",gridTemplateColumns:compact?"1fr":
                   "repeat("+Math.min(columns,shown.length)+", minmax(0,1fr))",gap:design.cardGap}}>
-                  {shown.slice(0,compact?3:4).map(p=><div key={p.productId} style={cardStyle}>
-                    <div style={{width:compact?86:"100%",aspectRatio:compact?"1 / 1":imageRatio,
+                  {shown.slice(0,compact?3:4).map(p=><div key={p.productId} style={{...cardStyle,padding:design.cardPadding}}>
+                    {design.showImage&&<div style={{width:compact?86:"100%",aspectRatio:compact?"1 / 1":imageRatio,maxHeight:design.imageMaxHeight,
                       flexShrink:0,background:"#f7f7f8"}}>
                       {p.imageUrl&&<img src={p.imageUrl} alt="" style={{width:"100%",height:"100%",objectFit:design.imageFit}}/>}
-                    </div>
+                    </div>}
                     <div style={{padding:11,display:"flex",flexDirection:"column",gap:6,minWidth:0,flex:1}}>
                       {design.showVendor&&<span style={{...small,fontSize:10}}>{p.vendor}</span>}
-                      <span style={{fontSize:14,fontWeight:600,overflowWrap:"anywhere"}}>{p.title}</span>
-                      {design.showPrice&&<strong style={{fontSize:14}}>
+                      {design.showTitle&&<span style={{fontSize:design.titleFontSize||14,
+                        fontWeight:design.titleFontWeight||600,
+                        fontStyle:design.titleItalic?"italic":"normal",
+                        color:design.titleColor||"inherit",overflowWrap:"anywhere"}}>{p.title}</span>}
+                      {design.showPrice&&<strong style={{fontSize:design.priceFontSize||14,
+                        fontWeight:design.priceFontWeight||600,
+                        fontStyle:design.priceItalic?"italic":"normal",
+                        color:design.priceColor||"inherit"}}>
                         {new Intl.NumberFormat("en-GB",{style:"currency",currency:p.currencyCode}).format(p.priceMinor/100)}
                       </strong>}
                       {design.showQuickAdd&&<div style={{marginTop:"auto",textAlign:"center",fontSize:11,

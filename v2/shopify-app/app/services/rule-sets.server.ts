@@ -18,7 +18,7 @@ export class FormValidationError extends Error {
 const bad = (message: string): never => { throw new FormValidationError(message); };
 
 /** Validate all submitted conditions without silently dropping invalid entries. */
-function parseGroups(raw: FormDataEntryValue | null): MatchGroup[] {
+function parseGroups(raw: FormDataEntryValue | null, allocations = false): MatchGroup[] {
   let input: unknown;
   try { input = JSON.parse(String(raw || "[]")); }
   catch { return bad("The matching conditions could not be read."); }
@@ -37,7 +37,7 @@ function parseGroups(raw: FormDataEntryValue | null): MatchGroup[] {
 
   let total = 0;
   const parsed: MatchGroup[] = shaped.map(group => {
-    const obj = group as { logic?: unknown; rules: unknown[] };
+    const obj = group as { logic?: unknown; rules: unknown[]; maxItems?: unknown };
     if (obj.rules.length === 0 || obj.rules.length > 50) {
       return bad("Each group needs between 1 and 50 conditions.");
     }
@@ -76,7 +76,13 @@ function parseGroups(raw: FormDataEntryValue | null): MatchGroup[] {
     if (obj.logic != null && obj.logic !== "AND" && obj.logic !== "OR") {
       return bad("Choose ALL or ANY within each condition group.");
     }
-    return { logic: asLogic(obj.logic), rules: parsedRules };
+    if(allocations && obj.maxItems!==undefined &&
+      (!Number.isInteger(Number(obj.maxItems))||Number(obj.maxItems)<1||Number(obj.maxItems)>8)){
+      return bad("Each allocated THEN group must request between 1 and 8 products.");
+    }
+    return {logic:asLogic(obj.logic),rules:parsedRules,
+      ...(allocations?{maxItems:obj.maxItems==null?1:Number(obj.maxItems)}:{})
+    };
   });
   if (total > 100) return bad("A set cannot contain more than 100 conditions.");
   return parsed;
@@ -99,7 +105,7 @@ export type ValidatedRuleSet = {
   sourceMatch: "all" | "products" | "rules";
   sourceProductIds: string[]; sourceRules: MatchGroup[]; sourceLogic: string;
   selectionMode: "ai" | "manual" | "hybrid"; pinnedIds: string[];
-  targetRules: MatchGroup[]; targetLogic: string;
+  targetRules: MatchGroup[]; targetLogic: string; targetMode: "filter" | "allocate";
   excludeTags: string[]; excludedProductIds: string[];
   excludeRules: MatchGroup[]; excludeLogic: string;
   fallbackMode: "next" | "stop";
@@ -122,8 +128,9 @@ export function parseRuleSet(form: FormData, plan: string): ValidatedRuleSet {
 
   const sourceProductIds = stringArray(form.get("sourceProductIds"),500);
   const pinnedIds = stringArray(form.get("pinnedIds"),500);
-  const sourceRules = parseGroups(form.get("sourceRules"));
-  const targetRules = parseGroups(form.get("targetRules"));
+  const targetMode=form.get("targetMode")==="allocate"?"allocate":"filter";
+  const sourceRules=parseGroups(form.get("sourceRules"));
+  const targetRules=parseGroups(form.get("targetRules"),targetMode==="allocate");
   const excludeRules = parseGroups(form.get("excludeRules"));
   const sourceLogic = logical(form.get("sourceLogic"));
   const targetLogic = logical(form.get("targetLogic"));
@@ -150,13 +157,23 @@ export function parseRuleSet(form: FormData, plan: string): ValidatedRuleSet {
   }
   const bundleDiscountPercent=kind==="bundle"?discountRequested:0;
   const parsedMax = Number(form.get("maxItems"));
-  const maxItems = Number.isFinite(parsedMax) ? Math.max(1,Math.min(kind==="bundle"?7:8,Math.round(parsedMax))) : 3;
+  const maxItems=Number.isFinite(parsedMax)?Math.max(1,Math.min(kind==="bundle"?7:8,Math.round(parsedMax))):3;
+  if(targetMode==="allocate"){
+    if(selectionMode==="manual"){
+      return bad("Choose Automatic or Hybrid for THEN group allocations.");
+    }
+    if(!targetRules.length)return bad("Add at least one THEN group before allocating products.");
+    const slots=targetRules.reduce((n,g)=>n+(g.maxItems||1),0);
+    if(slots>maxItems||slots>(kind==="bundle"?7:8)){
+      return bad("The THEN group allocations exceed this rule's product limit.");
+    }
+  }
 
   return {
     kind, name, heading, enabled, priority, sourceMatch,
     sourceProductIds: sourceMatch === "products" ? sourceProductIds : [],
     sourceRules: sourceMatch === "rules" ? sourceRules : [],
-    sourceLogic, selectionMode, pinnedIds, targetRules, targetLogic, excludeTags: tags,
+    sourceLogic, selectionMode, pinnedIds, targetRules, targetLogic, targetMode, excludeTags: tags,
     excludedProductIds, excludeRules, excludeLogic,
     fallbackMode, maxItems, bundleDiscountPercent,
   };
@@ -218,6 +235,7 @@ export async function duplicateRuleSet(shopDomain: string, setId: string) {
         sourceRules: existing.sourceRules as Prisma.InputJsonValue, sourceLogic: existing.sourceLogic,
         selectionMode: existing.selectionMode, pinnedIds: existing.pinnedIds as Prisma.InputJsonValue,
         targetRules: existing.targetRules as Prisma.InputJsonValue, targetLogic: existing.targetLogic,
+        targetMode: existing.targetMode,
         excludeTags: existing.excludeTags as Prisma.InputJsonValue,
         excludedProductIds: existing.excludedProductIds as Prisma.InputJsonValue,
         excludeRules: existing.excludeRules as Prisma.InputJsonValue,

@@ -7,7 +7,7 @@
  */
 export type MatchLogic = "AND" | "OR";
 export type MatchRule = { field: string; op: string; value: string | number };
-export type MatchGroup = { logic: MatchLogic; rules: MatchRule[] };
+export type MatchGroup = { logic: MatchLogic; rules: MatchRule[]; maxItems?: number };
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object" && !Array.isArray(value);
@@ -31,7 +31,12 @@ export function normaliseRuleGroups(value: unknown, fallback: unknown = "AND"): 
     return value.map(group => {
       const record = group as Record<string, unknown>;
       const raw = Array.isArray(record.rules) ? record.rules : [];
-      return { logic: asLogic(record.logic), rules: raw.map(ruleFrom).filter((r): r is MatchRule => r !== null) };
+      const count=Number(record.maxItems);
+      const maxItems=Number.isInteger(count)&&count>=1&&count<=8?count:undefined;
+      return {logic:asLogic(record.logic),
+        rules:raw.map(ruleFrom).filter((r):r is MatchRule=>r!==null),
+        ...(maxItems?{maxItems}:{})
+      };
     });
   }
   const flat = value.map(ruleFrom).filter((r): r is MatchRule => r !== null);

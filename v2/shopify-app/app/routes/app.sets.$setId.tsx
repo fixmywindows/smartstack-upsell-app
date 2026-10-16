@@ -194,10 +194,10 @@ function ProductPicker({name,selected,onChange,initial}:{
  * A merchant-friendly two-level AND/OR editor.
  * All/Any inside each group, and All/Any across groups.
  */
-function RuleGroups({label,groups,onChange,outerLogic,setOuterLogic,keys,categories,remaining,excluded=false}:{
+function RuleGroups({label,groups,onChange,outerLogic,setOuterLogic,keys,categories,remaining,excluded=false,allocate=false,maxCapacity=8}:{
   label:string;groups:MatchGroup[];onChange:(groups:MatchGroup[])=>void;
   outerLogic:string;setOuterLogic:(v:string)=>void;keys:string[];categories:string[];
-  remaining:number|null;excluded?:boolean;
+  remaining:number|null;excluded?:boolean;allocate?:boolean;maxCapacity?:number;
 }){
   const fieldOptions=[...FIELDS,{value:"metafield",label:"Metafield"}];
   const valueStyle={...selectStyle,minWidth:0};
@@ -221,7 +221,7 @@ function RuleGroups({label,groups,onChange,outerLogic,setOuterLogic,keys,categor
   return <div style={{display:"grid",gap:12}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
       <strong style={{fontSize:14}}>{label}</strong>
-      {groups.length>1&&<label style={{fontSize:12,display:"flex",alignItems:"center",gap:8}}>
+      {groups.length>1&&!allocate&&<label style={{fontSize:12,display:"flex",alignItems:"center",gap:8}}>
         Across groups:
         <select aria-label={label+" across groups"} style={{...selectStyle,width:166}}
           value={outerLogic} onChange={e=>setOuterLogic(e.target.value)}>
@@ -238,6 +238,13 @@ function RuleGroups({label,groups,onChange,outerLogic,setOuterLogic,keys,categor
     }}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
         <strong style={{fontSize:13}}>Group {gi+1}</strong>
+        {allocate&&<label style={{display:"flex",alignItems:"center",gap:6,fontSize:12}}>
+          Show up to
+          <select aria-label={"Group "+(gi+1)+" max products"} className="ssr-select"
+            value={group.maxItems??1} onChange={e=>updateGroup(gi,{...group,maxItems:Number(e.target.value)})}>
+            {Array.from({length:maxCapacity},(_,i)=>i+1).map(n=><option key={n} value={n}>{n} products</option>)}
+          </select>
+        </label>}
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <span style={{...muted,fontSize:12}}>Within group</span>
           <select aria-label={"Group "+(gi+1)+" logic"} style={{...selectStyle,width:148}}
@@ -307,9 +314,12 @@ function RuleGroups({label,groups,onChange,outerLogic,setOuterLogic,keys,categor
     </div>)}
     <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
       <button type="button" disabled={!canAdd} style={{...buttonStyle,justifySelf:"start"}}
-        onClick={()=>onChange([...groups,{logic:"AND",rules:[{field:"tags",op:"contains",value:""}]}])}>
+        onClick={()=>onChange([...groups,{logic:"AND",rules:[{field:"tags",op:"contains",value:""}],...(allocate?{maxItems:1}:{})}])}>
         + Add condition group
       </button>
+      {allocate&&<strong style={{fontSize:13,color:"#087c68"}}>
+        Allocated {groups.reduce((n,g)=>n+(g.maxItems??1),0)} / {maxCapacity} products
+      </strong>}
       <span style={muted}>
         {remaining===null?"Unlimited conditions available":remaining+" condition(s) remaining"}
       </span>
@@ -337,6 +347,7 @@ export default function SetEditor(){
   const [excludeGroups,setExcludeGroups]=useState<MatchGroup[]>(groupsForEditor(existing?.excludeRules,existing?.excludeLogic));
   const [sourceLogic,setSourceLogic]=useState(existing?.sourceLogic||"AND");
   const [targetLogic,setTargetLogic]=useState(existing?.targetLogic||"AND");
+  const [targetMode,setTargetMode]=useState(existing?.targetMode==="allocate"?"allocate":"filter");
   const [excludeTags,setExcludeTags]=useState(strArr(existing?.excludeTags).join(", "));
   const [excludedProductIds,setExcludedProductIds]=useState(strArr(existing?.excludedProductIds));
   const [excludeLogic,setExcludeLogic]=useState(existing?.excludeLogic||"OR");
@@ -348,6 +359,11 @@ export default function SetEditor(){
     +countRuleConditions(targetGroups)+countRuleConditions(excludeGroups);
   const freeSlots=data.ruleCap===null?null:Math.max(0,data.ruleCap-rulesUsed);
   const saving=navigation.state!=="idle";
+  const allocatedCount=targetGroups.reduce((n,g)=>n+(g.maxItems??1),0);
+  const cap=data.kind==="bundle"?7:8;
+  const effectiveMax=targetMode==="allocate"?Math.min(cap,Math.max(1,allocatedCount)):maxItems;
+  const invalidAllocation=targetMode==="allocate"&&
+    (allocatedCount>cap||!targetGroups.length||selectionMode==="manual");
   const pickerTitle=(title:string,description:string)=><div style={{marginBottom:13}}>
     <h3 style={{margin:"0 0 5px",fontSize:17}}>{title}</h3>
     <p style={{...muted,margin:0}}>{description}</p>
@@ -371,6 +387,8 @@ export default function SetEditor(){
         <input type="hidden" name="excludedProductIds" value={JSON.stringify(excludedProductIds)}/>
         <input type="hidden" name="sourceLogic" value={sourceLogic}/>
         <input type="hidden" name="targetLogic" value={targetLogic}/>
+        <input type="hidden" name="targetMode" value={targetMode}/>
+        {targetMode==="allocate"&&<input type="hidden" name="maxItems" value={effectiveMax}/>}
         <section style={box}>
           {pickerTitle("1. Name and availability","Give this recommendation set an internal name and decide whether to make it active.")}
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:16}}>
@@ -422,9 +440,22 @@ export default function SetEditor(){
               selected={pinnedIds} onChange={setPinnedIds}/>
           </>}
           {pickerTitle("Optional candidate filters","Filter eligible recommendations by categories, product tags, metafields, titles and more.")}
+          <label style={{...labelStyle,marginBottom:13}}>THEN group behaviour
+            <select className="ssr-select" value={targetMode}
+              onChange={e=>{
+                setTargetMode(e.target.value);
+                if(e.target.value==="allocate"&&selectionMode==="manual")setSelectionMode("hybrid");
+                if(e.target.value==="allocate")
+                  setTargetGroups(groups=>groups.map(g=>({...g,maxItems:g.maxItems??1})));
+              }}>
+              <option value="filter">Match ALL/ANY candidate groups as one filter (existing behaviour)</option>
+              <option value="allocate">Allocate individual products from each THEN group</option>
+            </select>
+          </label>
           <RuleGroups label="Recommended product conditions" groups={targetGroups} onChange={setTargetGroups}
             outerLogic={targetLogic} setOuterLogic={setTargetLogic} keys={data.metafieldKeys}
-            categories={data.categories} remaining={freeSlots}/>
+            categories={data.categories} remaining={freeSlots}
+            allocate={targetMode==="allocate"} maxCapacity={cap}/>
           <label style={{...labelStyle,marginTop:18}}>Exclude products carrying these tags
             <input name="excludeTags" style={{...selectStyle,marginTop:6}} value={excludeTags}
               onChange={e=>setExcludeTags(e.target.value)} placeholder="clearance, discontinued"/>
@@ -465,8 +496,8 @@ export default function SetEditor(){
                 min={1} max={100} value={priority} onChange={e=>setPriority(Number(e.target.value))}/>
             </label>
             <label style={labelStyle}>Maximum add-ons
-              <input type="number" name="maxItems" style={{...selectStyle,marginTop:6}}
-                min={1} max={data.kind==="bundle"?7:8} value={maxItems}
+              <input type="number" name={targetMode==="allocate"?undefined:"maxItems"} disabled={targetMode==="allocate"} style={{...selectStyle,marginTop:6}}
+                min={1} max={data.kind==="bundle"?7:8} value={effectiveMax}
                 onChange={e=>setMaxItems(Number(e.target.value))}/>
             </label>
           </div>
@@ -482,7 +513,7 @@ export default function SetEditor(){
             Bundle discounts and commission billing remain disabled during testing.</p>
           <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"center",flexWrap:"wrap",marginTop:24}}>
             <div style={{display:"flex",gap:9}}>
-              <button type="submit" disabled={saving} style={{...buttonStyle,background:"#202124",borderColor:"#202124",color:"white",padding:"12px 22px"}}>
+              <button type="submit" disabled={saving||invalidAllocation} style={{...buttonStyle,background:"#202124",borderColor:"#202124",color:"white",padding:"12px 22px"}}>
                 {saving?"Saving…":existing?"Save changes":"Create set"}
               </button>
               <Link to={"/app/blocks?kind="+data.kind} style={{...buttonStyle,textDecoration:"none"}}>Cancel</Link>

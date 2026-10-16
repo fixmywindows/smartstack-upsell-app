@@ -3,13 +3,21 @@ import db from "../db.server";
 // @ts-ignore — pure JS signal logic is covered by independent Node tests.
 import { diffOrderPairs, eligibleOrderProducts, observedPairMap } from "./co-purchases.mjs";
 import { ensureShop } from "./catalogue.server";
+// @ts-ignore — verified-attribution reconciliation is unit tested.
+import { verifiedPurchases } from "./purchase-attribution.mjs";
+import { validPlan } from "../utils/plan-limits";
 
 type Admin={graphql:(q:string,options?:{variables?:Record<string,unknown>})=>Promise<Response>};
 export type Scopes={scope?:string|null};
 type OrderNode={
   id:string;createdAt:string;cancelledAt:string|null;fullyPaid:boolean;test:boolean;
   lineItems:{pageInfo:{hasNextPage:boolean};
-    nodes:Array<{currentQuantity:number;product:{id:string}|null;variant:{id:string}|null}>};
+    nodes:Array<{
+      id:string;currentQuantity:number;
+      product:{id:string}|null;variant:{id:string}|null;
+      customAttributes:Array<{key:string;value:string}>;
+      discountedUnitPriceAfterAllDiscountsSet:{shopMoney:{amount:string;currencyCode:string}}
+    }>};
 };
 type OrdersResponse={
   data?:{orders?:{pageInfo:{hasNextPage:boolean;endCursor:string|null};nodes:OrderNode[]}};
@@ -24,7 +32,11 @@ query SmartStackOrders($after: String, $query: String) {
       id createdAt cancelledAt fullyPaid test
       lineItems(first: 100) {
         pageInfo { hasNextPage }
-        nodes { currentQuantity product { id } variant { id } }
+        nodes {
+          id currentQuantity product {id} variant {id}
+          customAttributes {key value}
+          discountedUnitPriceAfterAllDiscountsSet {shopMoney {amount currencyCode}}
+        }
       }
     }
   }
@@ -115,6 +127,44 @@ export async function pruneOldObservations(shopDomain:string,cutoff:Date) {
   }
 }
 
+/**
+ * Records only paid, directly attributed SmartStack quick-add lines.
+ * Shopify is the authority for price, currency and current quantities.
+ * Idempotent on re-sync; no customer contact information is persisted.
+ */
+export async function syncVerifiedPurchases(shopDomain:string,order:OrderNode) {
+  if(!/^gid:\/\/shopify\/Order\/[0-9]+$/.test(order.id))return 0;
+  const secret=process.env.SHOPIFY_API_SECRET||"";
+  if(secret.length<16)return 0;
+  const orderHash=orderKey(shopDomain,order.id);
+  const shop=await db.merchantShop.findUniqueOrThrow({
+    where:{domain:shopDomain},select:{plan:true}
+  });
+  const proposed=verifiedPurchases(secret,shopDomain,order,validPlan(shop.plan)) as Array<{
+    lineId:string;kind:string;sourceProductId:string;productId:string;setId:string;
+    groupIndex:number|null;currencyCode:string;quantity:number;netRevenueMinor:number;
+    commissionBasisPoints:number;estimatedCommissionMinor:number;purchasedAt:Date
+  }>;
+  return db.$transaction(async tx=>{
+    const existing=await tx.recommendationPurchase.findMany({
+      where:{shopDomain,orderKey:orderHash},
+      select:{lineKey:true,commissionBasisPoints:true}
+    });
+    const basis=new Map(existing.map(row=>[row.lineKey,row.commissionBasisPoints]));
+    await tx.recommendationPurchase.deleteMany({where:{shopDomain,orderKey:orderHash}});
+    const rows=proposed.map(row=>{
+      const lineKey=orderKey(shopDomain,row.lineId);
+      const bps=basis.get(lineKey)??row.commissionBasisPoints;
+      const {lineId,...record}=row;
+      return {...record,shopDomain,orderKey:orderHash,lineKey,
+        commissionBasisPoints:bps,
+        estimatedCommissionMinor:Math.round(row.netRevenueMinor*bps/10000)}
+    });
+    if(rows.length)await tx.recommendationPurchase.createMany({data:rows});
+    return rows.length;
+  },{isolationLevel:"Serializable"});
+}
+
 export async function syncRecentOrderSignals(
   admin:Admin,shopDomain:string,scope:string|null|undefined
 ) {
@@ -132,12 +182,18 @@ export async function syncRecentOrderSignals(
   const data=await resp.json() as OrdersResponse;
   if(data.errors?.length||!data.data?.orders)throw new Error("Shopify did not return authorised orders");
   const {nodes,pageInfo}=data.data.orders;
-  let changed=0;
+  let changed=0,attributed=0;
   for(const order of nodes){
     if(await updateOrderObservation(shopDomain,order))changed++;
+    attributed+=await syncVerifiedPurchases(shopDomain,order);
   }
   const finished=!pageInfo.hasNextPage;
-  if(finished)await pruneOldObservations(shopDomain,since);
+  if(finished){
+    await pruneOldObservations(shopDomain,since);
+    await db.recommendationPurchase.deleteMany({
+      where:{shopDomain,purchasedAt:{lt:new Date(Date.now()-365*24*60*60*1000)}}
+    });
+  }
   const observed=await db.orderPairObservation.count({where:{shopDomain}});
   await db.orderSyncState.upsert({
     where:{shopDomain},
@@ -146,7 +202,7 @@ export async function syncRecentOrderSignals(
     update:{cursor:finished?null:pageInfo.endCursor,finished,
       scanned:state?.finished?nodes.length:(state?.scanned||0)+nodes.length,observed}
   });
-  return {authorized:true,added:changed,scanned:nodes.length,finished,observed,
+  return {authorized:true,added:changed,attributed,scanned:nodes.length,finished,observed,
     message:observed?"Verified order associations are available for ranking.":
       "No qualifying paid non-test orders with multiple products were found yet."};
 }

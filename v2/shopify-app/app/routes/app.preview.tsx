@@ -146,13 +146,22 @@ export default function RecommendationPreview() {
                 {Boolean(data.result.matchedSets?.length)&&<div style={{display:"grid",gap:7,marginBottom:15}}>
                   <strong style={{fontSize:13}}>Products allocated by rule</strong>
                   {data.result.matchedSets?.map((set,index)=><div key={set.id}
-                    style={{display:"flex",alignItems:"center",justifyContent:"space-between",
-                      borderRadius:9,padding:"9px 12px",background:index%2===0?"#f8f7fd":"#f2fbf7",
-                      gap:12}}>
-                    <span style={{fontSize:13,fontWeight:600}}>{set.name}</span>
-                    <span style={{fontSize:12,fontWeight:700}}>
-                      {set.productCount} added · Priority {set.priority}
-                    </span>
+                    style={{borderRadius:9,padding:"10px 12px",
+                      background:index%2===0?"#f8f7fd":"#f2fbf7"}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+                      <span style={{fontSize:13,fontWeight:600}}>{set.name}</span>
+                      <span style={{fontSize:12,fontWeight:700}}>
+                        {set.productCount} added · Priority {set.priority}
+                      </span>
+                    </div>
+                    {set.groupContributions?.length>0&&<div style={{display:"flex",gap:7,
+                      flexWrap:"wrap",marginTop:8}}>
+                      {set.groupContributions.map(group=><span key={group.index}
+                        style={{fontSize:11,color:"#34584e",background:"#dff6ed",
+                          borderRadius:7,padding:"5px 8px"}}>
+                        Group {group.index+1}: {group.contributed} / {group.requested} products
+                      </span>)}
+                    </div>}
                   </div>)}
                 </div>}
                 {data.result.matchedSet && <p style={{...textSmall,
@@ -168,7 +177,7 @@ export default function RecommendationPreview() {
                     <div style={{ ...textSmall, marginTop: 6 }}>{item.reason}</div>
                   </div>)}
                 </div>
-                {data.kind === "bundle" && <p style={{ ...textSmall, marginTop: 16 }}>The storefront will include the source product and up to three add-ons, with a selectable set total. Bundle discounts are still disabled.</p>}
+                {data.kind === "bundle" && <p style={{ ...textSmall, marginTop: 16 }}>The storefront includes the current product and at most seven selected add-ons, within the same eight-product cap. Checkout bundle discounts are not active.</p>}
               </> : <p role="status">No eligible recommendations for this source product. Try another product, review manual pins, or loosen your exclusions.</p>}
         </div>}
     </s-section>
