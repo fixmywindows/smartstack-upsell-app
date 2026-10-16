@@ -122,7 +122,7 @@ export async function getRecommendations(
     // Backward-compatible field for existing admin preview.
     matchedSet:options.diagnostics?(matchedSets[0]||null):null,
     // Only the authenticated admin gets rule names and allocation details.
-    ...(options.diagnostics?{trace,matchedSets,blockLimit,allocatedSlots:selected.length,
-      remainingSlots:Math.max(0,addonLimit-selected.length)}:{})
+    ...(options.diagnostics?{trace,matchedSets,blockLimit,allocatedSlots:selected.length+(kind==="bundle"?1:0),
+      remainingSlots:Math.max(0,blockLimit-selected.length-(kind==="bundle"?1:0))}:{})
   };
 }
