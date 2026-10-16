@@ -296,8 +296,10 @@
     let layout = block.__ssDesign?.layout || 'grid';
     // Previously 'Bought together' defaulted to a narrow list, even when
     // placed as a full-width shelf. Match the native product grid on wide rows.
+    const hostWidth=block.getBoundingClientRect().width ||
+      block.parentElement?.getBoundingClientRect().width || 0;
     if(layout==='compact' && block.__ssDesign?.preset==='theme'
-      && block.getBoundingClientRect().width>=700){
+      && hostWidth>=700){
       layout='grid';
     }
     grid.dataset.layout = layout;
