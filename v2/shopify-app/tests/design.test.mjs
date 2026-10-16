@@ -101,3 +101,29 @@ test("CSS is namespaced to SmartStack and renderer does not introduce billing",(
   assert.doesNotMatch(js,/chargeUsage|billingMeter\.charge|_smartstack_token/);
   assert.match(js,/url\.origin === location\.origin/);
 });
+
+
+test("theme matching uses readable native typography rather than Shopify's small rem root",()=>{
+  assert.doesNotMatch(css,/font-size:\s*(?:0?\.)\d+rem/);
+  assert.match(css,/--ss-heading-size/);
+  assert.match(css,/--ss-card-title-size/);
+  assert.match(css,/--ss-price-size/);
+  assert.match(js,/\.related-products h2/);
+  assert.match(js,/getComputedStyle\(node\)/);
+  assert.match(js,/--ss-heading-font/);
+  assert.match(js,/--ss-card-title-weight/);
+  assert.match(js,/--ss-price-weight/);
+});
+test("theme presets use native four-column shelves and compact responsive placements",()=>{
+  assert.match(css,/--ss-cols:\s*4/);
+  assert.match(js,/native product grid|same card grid as native related products|full-width shelf/i);
+  assert.match(js,/block\.parentElement\?\.getBoundingClientRect\(\)\.width/);
+  assert.match(js,/layout='grid'/);
+  assert.match(css,/@container ss-block \(max-width: 420px\)/);
+});
+test("theme-style cart button remains outlined if its native background is transparent",()=>{
+  assert.match(js,/bg='transparent'/);
+  assert.match(js,/--ss-button-border/);
+  assert.match(css,/--ss-button-outline/);
+  assert.match(css,/color:\s*var\(--ss-button-outline\)/);
+});

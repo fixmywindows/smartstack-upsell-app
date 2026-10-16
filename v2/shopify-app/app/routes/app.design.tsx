@@ -84,9 +84,11 @@ export default function DesignStudio(){
         onChange={e=>set(field,e.target.checked as never)}/>{text}
     </label>;
   const width=device==="mobile"?330:850;
-  const columns=device==="mobile"?design.mobileColumns:design.desktopColumns;
+  const columns=device==="mobile"?design.mobileColumns:
+    (design.preset==="theme"?4:design.desktopColumns);
   const imageRatio=design.imageRatio==="portrait"?"4 / 5":design.imageRatio==="landscape"?"4 / 3":"1 / 1";
-  const compact=design.layout==="compact";
+  const compact=design.layout==="compact" &&
+    !(design.preset==="theme" && device==="desktop");
   const cardStyle:React.CSSProperties={
     minWidth:0,display:"flex",flexDirection:compact?"row":"column",
     background:design.cardStyle==="soft"?"#f8f8f9":"white",
@@ -235,8 +237,8 @@ export default function DesignStudio(){
                     </div>
                     <div style={{padding:11,display:"flex",flexDirection:"column",gap:6,minWidth:0,flex:1}}>
                       {design.showVendor&&<span style={{...small,fontSize:10}}>{p.vendor}</span>}
-                      <span style={{fontSize:12,fontWeight:600,overflowWrap:"anywhere"}}>{p.title}</span>
-                      {design.showPrice&&<strong style={{fontSize:12}}>
+                      <span style={{fontSize:14,fontWeight:600,overflowWrap:"anywhere"}}>{p.title}</span>
+                      {design.showPrice&&<strong style={{fontSize:14}}>
                         {new Intl.NumberFormat("en-GB",{style:"currency",currency:p.currencyCode}).format(p.priceMinor/100)}
                       </strong>}
                       {design.showQuickAdd&&<div style={{marginTop:"auto",textAlign:"center",fontSize:11,

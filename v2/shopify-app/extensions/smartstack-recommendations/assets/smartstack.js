@@ -3,7 +3,7 @@
  * Each block initialises independently, including re-rendered theme-editor blocks.
  */
 (() => {
-  const PREVIEW_VERSION = '0.3.0';
+  const PREVIEW_VERSION = '0.3.1';
   const previous = window.__smartstackRenderer;
   if (previous?.version === PREVIEW_VERSION) { previous.scan(); return; }
   previous?.dispose?.();
@@ -129,17 +129,69 @@
     block.dataset.ssPreset=design.preset||'theme';
     block.style.setProperty('--ss-gap',design.cardGap+'px');
     block.style.setProperty('--ss-radius',design.cardRadius+'px');
-    block.style.setProperty('--ss-cols',String(design.desktopColumns));
+    // Match the four-column product shelf used by the merchant's theme.
+    // Narrow app placements still switch layouts through container queries.
+    block.style.setProperty('--ss-cols',String(
+      design.preset==='theme' && block.dataset.styleSource!=='block'
+        ? 4 : design.desktopColumns
+    ));
     block.style.setProperty('--ss-mobile-cols',String(design.mobileColumns));
     block.style.setProperty('--ss-image-ratio',
       design.imageRatio==='portrait'?'4 / 5':design.imageRatio==='landscape'?'4 / 3':'1 / 1');
     block.style.setProperty('--ss-image-fit',design.imageFit);
+    // Read computed styles from real theme product cards, rather than using
+    // rem sizes that can shrink to 9px on Shopify's 10px-root themes.
+    const references=[
+      ['.related-products h2, .related-products__heading','--ss-heading-size',18,36],
+      ['.related-products .card__heading, .product-grid .card__heading','--ss-card-title-size',13,20],
+      ['.related-products .price-item, .product-grid .price-item','--ss-price-size',13,20]
+    ];
+    for(const [selector,property,min,max] of references){
+      const node=document.querySelector(selector);
+      if(!node||node.closest('[data-smartstack-block]'))continue;
+      const computed=getComputedStyle(node);
+      const px=parseFloat(computed.fontSize);
+      if(Number.isFinite(px))block.style.setProperty(property,
+        Math.max(min,Math.min(max,px))+'px');
+      if(property==='--ss-heading-size'){
+        block.style.setProperty('--ss-heading-font',computed.fontFamily);
+        block.style.setProperty('--ss-heading-weight',computed.fontWeight);
+        block.style.setProperty('--ss-heading-line-height',computed.lineHeight);
+        block.style.setProperty('--ss-heading-letter-spacing',computed.letterSpacing);
+      }else if(property==='--ss-card-title-size'){
+        block.style.setProperty('--ss-card-font',computed.fontFamily);
+        block.style.setProperty('--ss-card-title-weight',computed.fontWeight);
+      }else if(property==='--ss-price-size'){
+        block.style.setProperty('--ss-price-weight',computed.fontWeight);
+      }
+    }
+    if(design.preset==='theme' && block.dataset.styleSource!=='block'){
+      const nativeGrid=document.querySelector('.related-products .grid, .related-products .product-grid');
+      if(nativeGrid){
+        const gap=parseFloat(getComputedStyle(nativeGrid).columnGap);
+        if(Number.isFinite(gap) && gap>=8 && gap<=36){
+          block.style.setProperty('--ss-gap',gap+'px');
+        }
+      }
+      const nativeMedia=document.querySelector('.related-products .card__media');
+      if(nativeMedia){
+        const nativeStyle=getComputedStyle(nativeMedia);
+        block.style.setProperty('--ss-media-bg',nativeStyle.backgroundColor);
+      }
+    }
 
-    let bg='#24252a',fg='#fff',radius=design.cardRadius+'px',size='.875rem',border='transparent';
+    let bg='#24252a',fg='#fff',radius=design.cardRadius+'px',size='14px',border='transparent';
     const buyButton=themeButtons();
     if(buyButton){
       const style=getComputedStyle(buyButton);
-      if(isOpaqueColor(style.backgroundColor)) bg=style.backgroundColor;
+      if(isOpaqueColor(style.backgroundColor))bg=style.backgroundColor;
+      else if(style.backgroundColor==='transparent' || /rgba\([^)]*,\s*0(?:\.0+)?\)/.test(style.backgroundColor)){
+        // Many Shopify product forms use transparent Add to Cart buttons with
+        // borders drawn by theme CSS. Keep them outlined instead of invisible.
+        bg='transparent';
+        border=isOpaqueColor(style.borderTopColor) && parseFloat(style.borderTopWidth)>0
+          ? style.borderTopColor : (style.color||'#24252a');
+      }
       if(isOpaqueColor(style.color)) fg=style.color;
       if(style.borderRadius && style.borderRadius!=='0px') radius=style.borderRadius;
       if(style.fontSize) size=style.fontSize;
@@ -152,6 +204,7 @@
     block.style.setProperty('--ss-button-bg',bg);
     block.style.setProperty('--ss-button-fg',fg);
     block.style.setProperty('--ss-button-border',border);
+    block.style.setProperty('--ss-button-outline',isOpaqueColor(bg)?bg:fg);
     block.style.setProperty('--ss-button-radius',radius);
     block.style.setProperty('--ss-button-size',size);
     const header=block.querySelector('.smartstack-recommendations__head');
@@ -266,7 +319,15 @@
 
   function makeCardCollection(block, items) {
     const grid = create('div', 'smartstack-recommendations__products');
-    const layout = block.__ssDesign?.layout || 'grid';
+    let layout = block.__ssDesign?.layout || 'grid';
+    // Previously 'Bought together' defaulted to a narrow list, even when
+    // placed as a full-width shelf. Match the native product grid on wide rows.
+    const hostWidth=block.getBoundingClientRect().width ||
+      block.parentElement?.getBoundingClientRect().width || 0;
+    if(layout==='compact' && block.__ssDesign?.preset==='theme'
+      && hostWidth>=700){
+      layout='grid';
+    }
     grid.dataset.layout = layout;
     for (const item of items) {
       if (!item.available) continue;
