@@ -5,7 +5,7 @@
 .smartstack-recommendations {
   --ss-gap: 16px;
   --ss-radius: 8px;
-  --ss-cols: 3;
+  --ss-cols: 4;
   --ss-mobile-cols: 2;
   --ss-image-ratio: 1 / 1;
   --ss-image-fit: contain;
@@ -13,7 +13,20 @@
   --ss-button-fg: #fff;
   --ss-button-border: transparent;
   --ss-button-radius: 8px;
-  --ss-button-size: 0.875rem;
+  --ss-button-size: 14px;
+  --ss-heading-font: var(--font-heading-family, inherit);
+  --ss-heading-size: 22px;
+  --ss-heading-weight: 650;
+  --ss-heading-line-height: 1.3;
+  --ss-heading-letter-spacing: normal;
+  --ss-heading-color: currentColor;
+  --ss-card-font: var(--font-body-family, inherit);
+  --ss-card-title-size: 1em;
+  --ss-card-title-weight: 500;
+  --ss-price-size: 1em;
+  --ss-price-weight: 600;
+  --ss-media-bg: transparent;
+  --ss-media-radius: 0px;
   container: ss-block / inline-size;
   display: block;
   max-width: 100%;
@@ -21,7 +34,7 @@
   margin: clamp(18px, 2.5vw, 36px) 0;
   color: inherit;
   font-family: inherit;
-  font-size: inherit;
+  font-size: max(14px, 1em);
   line-height: inherit;
 }
 .smartstack-recommendations[hidden],
@@ -33,12 +46,12 @@
 .smartstack-recommendations__title {
   margin: 0;
   padding: 0;
-  color: inherit;
-  font-family: inherit;
-  font-size: clamp(1.1rem, 1.6cqw + .8rem, 1.6rem);
-  font-weight: 600;
-  line-height: 1.32;
-  letter-spacing: -.015em;
+  color: var(--ss-heading-color);
+  font-family: var(--ss-heading-font);
+  font-size: var(--ss-heading-size);
+  font-weight: var(--ss-heading-weight);
+  line-height: var(--ss-heading-line-height);
+  letter-spacing: var(--ss-heading-letter-spacing);
 }
 .smartstack-recommendations__body { min-width: 0; max-width: 100%; }
 .smartstack-recommendations__products {
@@ -92,7 +105,8 @@
   min-width: 0;
   aspect-ratio: var(--ss-image-ratio);
   overflow: hidden;
-  background: rgba(127,133,149,.055);
+  background: var(--ss-media-bg);
+  border-radius: var(--ss-media-radius);
   color: inherit;
   text-decoration: none;
 }
@@ -129,7 +143,7 @@
   padding: 12px;
 }
 .smartstack-recommendations__vendor {
-  font-size: .72rem;
+  font-size: max(12px, .82em);
   line-height: 1.3;
   opacity: .7;
   letter-spacing: .015em;
@@ -145,19 +159,20 @@
 }
 .smartstack-recommendations__product-name {
   color: inherit;
-  font-family: inherit;
-  font-size: .9rem;
+  font-family: var(--ss-card-font);
+  font-size: var(--ss-card-title-size);
   line-height: 1.45;
-  font-weight: 550;
-  letter-spacing: 0;
+  font-weight: var(--ss-card-title-weight);
+  letter-spacing: inherit;
   margin: 0;
   overflow-wrap: anywhere;
 }
 .smartstack-recommendations__price {
   color: inherit;
   margin: 0;
-  font-size: .9rem;
-  font-weight: 650;
+  font-family: var(--ss-card-font);
+  font-size: var(--ss-price-size);
+  font-weight: var(--ss-price-weight);
   line-height: 1.35;
 }
 .smartstack-recommendations__button {
@@ -206,7 +221,7 @@
 }
 .smartstack-recommendations__cart-feedback {
   margin: 5px 0 0;
-  font-size: .75rem;
+  font-size: max(12px, .82em);
   line-height: 1.4;
   color: inherit;
 }
@@ -221,7 +236,7 @@
   border-radius: 8px;
   background: rgba(127,133,149,.04);
   color: inherit;
-  font-size: .85rem;
+  font-size: max(13px, .92em);
   line-height: 1.5;
 }
 .smartstack-recommendations__products[data-layout="compact"] .smartstack-recommendations__item {
@@ -248,7 +263,7 @@
   align-self: start;
   padding: 6px 10px;
   min-height: 32px;
-  font-size: .76rem;
+  font-size: max(12px, .82em);
 }
 .smartstack-recommendations__bundle {
   max-width: 100%;
@@ -266,7 +281,7 @@
   gap: 12px;
   padding: 9px 0;
   border-bottom: 1px solid rgba(110,116,129,.16);
-  font-size: .85rem;
+  font-size: max(13px, .92em);
 }
 .smartstack-recommendations__bundle-row:last-child { border-bottom: 0; }
 .smartstack-recommendations__bundle-row img {
@@ -287,7 +302,7 @@
 .smartstack-recommendations__bundle-info a { color: inherit; text-decoration: none; overflow-wrap: anywhere; }
 .smartstack-recommendations__bundle-info a:hover { text-decoration: underline; }
 .smartstack-recommendations__bundle-info small { opacity: .68; font-size: .76em; }
-.smartstack-recommendations__bundle-price { font-weight: 650; white-space: nowrap; font-size: .88rem; }
+.smartstack-recommendations__bundle-price { font-family: var(--ss-card-font); font-weight: var(--ss-price-weight); white-space: nowrap; font-size: var(--ss-price-size); }
 .smartstack-recommendations__bundle-summary {
   display: flex;
   justify-content: space-between;
@@ -295,11 +310,11 @@
   flex-wrap: wrap;
   gap: 10px;
   margin: 16px 0 12px;
-  font-size: .9rem;
+  font-size: max(13px, 1em);
 }
-.smartstack-recommendations__bundle-total { font-size: clamp(1.05rem, 2.2cqw, 1.35rem); font-weight: 700; }
+.smartstack-recommendations__bundle-total { font-size: max(17px, 1.12em); font-weight: 700; }
 .smartstack-recommendations__bundle .smartstack-recommendations__button { width: auto; max-width: 340px; }
-.smartstack-recommendations__bundle-note { font-size: .72rem; margin: 8px 0 0; opacity: .68; line-height: 1.5; }
+.smartstack-recommendations__bundle-note { font-size: max(12px, .8em); margin: 8px 0 0; opacity: .7; line-height: 1.5; }
 .smartstack-recommendations__bundle[data-layout="cards"] .smartstack-recommendations__bundle-list {
   grid-template-columns: repeat(4,minmax(0,1fr));
   gap: clamp(8px,1.7cqw,17px);
@@ -333,7 +348,7 @@
     grid-template-columns: repeat(2, minmax(0,1fr));
   }
 }
-@container ss-block (max-width: 360px) {
+@container ss-block (max-width: 420px) {
   .smartstack-recommendations__products[data-layout="grid"] { grid-template-columns: 1fr; }
   .smartstack-recommendations__products[data-layout="grid"] .smartstack-recommendations__item {
     flex-direction: row;
@@ -341,8 +356,8 @@
     gap: 12px;
   }
   .smartstack-recommendations__products[data-layout="grid"] .smartstack-recommendations__media {
-    width: 94px;
-    flex: 0 0 94px;
+    width: 84px;
+    flex: 0 0 84px;
     aspect-ratio: 1 / 1;
   }
   .smartstack-recommendations__products[data-layout="grid"] .smartstack-recommendations__detail {
@@ -354,7 +369,7 @@
     width: auto;
     min-height: 31px;
     padding: 5px 9px;
-    font-size: .75rem;
+    font-size: max(12px, .82em);
   }
   .smartstack-recommendations__bundle-row {
     grid-template-columns: 18px 46px minmax(0,1fr);
@@ -364,6 +379,16 @@
   .smartstack-recommendations__bundle-price { grid-column: 3; justify-self: start; }
   .smartstack-recommendations__bundle .smartstack-recommendations__button {
     width: 100%; max-width: none;
+  }
+}
+@container ss-block (max-width: 780px) and (min-width: 621px) {
+  .smartstack-recommendations__products[data-layout="grid"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@container ss-block (max-width: 360px) {
+  .smartstack-recommendations__products[data-layout="carousel"] {
+    grid-auto-columns: minmax(180px, 80cqw);
   }
 }
 @media (max-width: 767px) {
