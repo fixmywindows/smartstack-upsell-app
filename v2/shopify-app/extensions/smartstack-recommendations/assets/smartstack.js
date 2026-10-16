@@ -51,6 +51,14 @@
     return Number.isFinite(num)?Math.min(max,Math.max(min,Math.round(num))):fallback;
   };
   const cssHex = value => typeof value==='string' && /^#[0-9a-f]{6}$/i.test(value.trim());
+  const readableForeground = hex => {
+    if(!cssHex(hex))return '#fff';
+    const channels=[1,3,5].map(index=>parseInt(hex.slice(index,index+2),16)/255);
+    const linear=channels.map(c=>c<=0.04045?c/12.92:((c+0.055)/1.055)**2.4);
+    const luminance=0.2126*linear[0]+0.7152*linear[1]+0.0722*linear[2];
+    // WCAG relative-luminance threshold: choose the higher-contrast text.
+    return (luminance+0.05)/0.05 >= 1.05/(luminance+0.05)?'#111':'#fff';
+  };
 
   function themeButtons() {
     const selectors=[
@@ -137,7 +145,10 @@
       if(style.fontSize) size=style.fontSize;
       if(isOpaqueColor(style.borderTopColor) && style.borderTopWidth!=='0px')border=style.borderTopColor;
     }
-    if(cssHex(design.buttonColor)) bg=design.buttonColor;
+    if(cssHex(design.buttonColor)) {
+      bg=design.buttonColor;
+      fg=readableForeground(bg);
+    }
     block.style.setProperty('--ss-button-bg',bg);
     block.style.setProperty('--ss-button-fg',fg);
     block.style.setProperty('--ss-button-border',border);
