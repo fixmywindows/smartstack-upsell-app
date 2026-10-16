@@ -3,12 +3,53 @@
  * Each block initialises independently, including re-rendered theme-editor blocks.
  */
 (() => {
-  const PREVIEW_VERSION = '0.5.0';
+  const PREVIEW_VERSION = '0.6.0';
   const previous = window.__smartstackRenderer;
   if (previous?.version === PREVIEW_VERSION) { previous.scan(); return; }
   previous?.dispose?.();
 
   const states = new WeakMap();
+  // Do not collect behavioural data before Shopify confirms analytics consent.
+  // No cookies, IP addresses or customer identifiers are sent to SmartStack.
+  if(window.Shopify?.loadFeatures){
+    window.Shopify.loadFeatures([{name:'consent-tracking-api',version:'0.1'}],()=>{});
+  }
+  const analyticsAllowed=()=>{
+    try{return window.Shopify?.customerPrivacy?.analyticsProcessingAllowed?.()===true;}
+    catch{return false;}
+  };
+  function track(block,item,type){
+    if(isEditor()||!analyticsAllowed()||!item?.trackingRef||
+      !['render','view','click','add'].includes(type))return;
+    const ref=String(item.trackingRef);
+    if(ref.length>1000||!ref.startsWith('ss1.'))return;
+    const root=block.dataset.proxyPath||'/apps/smartstack';
+    if(!/^\/(?!\/)[a-zA-Z0-9/_-]+$/.test(root))return;
+    const eventId=window.crypto?.randomUUID?.();
+    if(!eventId)return;
+    fetch(root.replace(/\/$/,'')+'/events',{
+      method:'POST',credentials:'same-origin',keepalive:true,
+      headers:{'Content-Type':'application/json','Accept':'application/json',
+        'ngrok-skip-browser-warning':'1'},
+      body:JSON.stringify({eventId,type,trackingRef:ref,consented:true})
+    }).catch(()=>{});
+  }
+  function observeCard(block,item,element){
+    if(isEditor())return;
+    track(block,item,'render');
+    if(!('IntersectionObserver' in window))return;
+    let counted=false;
+    const observer=new IntersectionObserver(entries=>{
+      if(counted)return;
+      if(entries.some(entry=>entry.isIntersecting&&entry.intersectionRatio>=0.5)){
+        if(analyticsAllowed()){counted=true;track(block,item,'view');observer.disconnect();}
+      }
+    },{threshold:[0.5]});
+    observer.observe(element);
+    // Theme editor replaces blocks; disconnect when the DOM node is removed.
+    const onRemove=()=>{if(!element.isConnected)observer.disconnect();};
+    document.addEventListener('shopify:section:unload',onRemove,{once:true});
+  }
   const isEditor = () => Boolean(window.Shopify?.designMode);
   const create = (tag, cls, value) => {
     const element = document.createElement(tag);
@@ -254,7 +295,10 @@
       credentials: 'same-origin',
       headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
       body: JSON.stringify({items: items.map(item => ({
-        id: Number(item.id), quantity: Math.max(1, Math.floor(Number(item.quantity)))
+        id: Number(item.id), quantity: Math.max(1, Math.floor(Number(item.quantity))),
+        ...(analyticsAllowed() && typeof item.trackingRef==='string' &&
+          item.trackingRef.startsWith('ss1.')?
+          {properties:{_smartstack_ref:item.trackingRef}}:{})
       }))})
     });
     if (!response.ok) {
@@ -324,6 +368,7 @@
     const design=block.__ssDesign||{};
     const media=create('a','smartstack-recommendations__media');
     media.href=href;
+    media.addEventListener('click',()=>track(block,item,'click'));
     media.setAttribute('aria-label','View '+(item.title||'product'));
     if(item.imageUrl){
       const image=create('img','smartstack-recommendations__photo');
@@ -335,6 +380,7 @@
     const detail=create('div','smartstack-recommendations__detail');
     const link=create('a','smartstack-recommendations__product-link');
     link.href=href;
+    link.addEventListener('click',()=>track(block,item,'click'));
     if(design.showTitle!==false){
       link.append(create('h3','smartstack-recommendations__product-name',item.title||'Product'));
       detail.append(link);
@@ -359,13 +405,14 @@
       button.addEventListener('click',async()=>{
         const chosen=variantChoice(item,select);
         if(!chosen){
-          if(!canChoose) location.href=href;
+          if(!canChoose){track(block,item,'click');location.href=href;}
           else feedback(feedbackArea,'Select the product options above.');
           return;
         }
         button.disabled=true;button.textContent='Adding…';
         try{
-          await addToCart([{id:chosen,quantity:1}]);
+          await addToCart([{id:chosen,quantity:1,trackingRef:item.trackingRef}]);
+          track(block,item,'add');
           button.textContent='Added ✓';
           feedback(feedbackArea,'Added to your basket.',true);
         }catch(error){
@@ -376,6 +423,7 @@
       detail.append(button,feedbackArea);
     }
     article.append(detail);
+    observeCard(block,item,article);
     return article;
   }
 
@@ -439,6 +487,7 @@
     }
     function makeRow(item,original) {
       const row=create('div','smartstack-recommendations__bundle-row');
+      if(!original)observeCard(block,item,row);
       const tick=create('input');
       tick.type='checkbox';tick.checked=true;
       if(original){
@@ -462,6 +511,7 @@
       const info=create('div','smartstack-recommendations__bundle-info');
       const title=create('a','',item.title||'Product');
       title.href=safePath(item.url)||'#';
+      if(!original)title.addEventListener('click',()=>track(block,item,'click'));
       info.append(title);
       if(original)info.append(create('small','','Current product · options selected above'));
       else{
@@ -518,7 +568,10 @@
       }
       add.disabled=true;add.textContent='Adding set…';
       try{
-        await addToCart(variantIds.map(id=>({id,quantity:1})));
+        await addToCart(variantIds.map((id,index)=>({
+          id,quantity:1,trackingRef:index===0?null:chosen[index-1].trackingRef
+        })));
+        for(const item of chosen)track(block,item,'add');
         add.textContent='Added to basket ✓';
         feedback(note,'Your selected set was added.',true);
       }catch(error){
