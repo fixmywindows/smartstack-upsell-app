@@ -149,7 +149,7 @@ export function recommend({sourceId,products,config,pairs={},semanticScores={}})
   const mode = config.mode ?? MODES.HYBRID;
   if (!Object.values(BLOCK_TYPES).includes(kind)) throw new Error('Unknown block type');
   if (!Object.values(MODES).includes(mode)) throw new Error('Unknown selection mode');
-  const max = Math.max(1,Math.min(kind===BLOCK_TYPES.BUNDLE?3:12,Math.floor(Number(config.maxItems ?? 4))));
+  const max = Math.max(1,Math.min(kind===BLOCK_TYPES.BUNDLE?7:8,Math.floor(Number(config.maxItems ?? 4))));
   const byId = new Map(products.map(p=>[p.id,p]));
   const pool = products.filter(p=>eligible(source,p,config));
   const allowed = new Set(pool.map(p=>p.id));
@@ -219,7 +219,7 @@ export function recommend({sourceId,products,config,pairs={},semanticScores={}})
  * Checkout application of the discount must be separately verified via Shopify Functions.
  */
 export function bundleTotals({items,selectedIds,discount={type:'none',value:0},requireAll=true}) {
-  if(!Array.isArray(items)||items.length<2||items.length>4)throw new Error('Bundle must contain 2–4 products');
+  if(!Array.isArray(items)||items.length<2||items.length>8)throw new Error('Bundle must contain 2–8 products');
   const selected=new Set(selectedIds);
   const chosen=items.filter(item=>selected.has(item.id));
   const subtotalCents=chosen.reduce((sum,item)=>sum+Math.max(0,Math.round(item.priceCents)),0);
