@@ -1,6 +1,8 @@
 import db from "../db.server";
 import { normaliseRuleGroups } from "../utils/rule-groups";
 import { getObservedPairs } from "./order-signals.server";
+// @ts-ignore — pure, unit-tested grouped candidate selector.
+import { recommendWithGroups } from "./group-allocation.mjs";
 // @ts-ignore — pure JS engine, tested with Node.
 import { recommend, evaluateGroups } from "./engine.mjs";
 // @ts-ignore — independent, deterministic aggregator, tested with Node.
@@ -46,7 +48,7 @@ export async function getRecommendations(
   const addonLimit=kind==="bundle"?Math.max(0,blockLimit-1):blockLimit;
   const pairs=kind==="bought_together"?await getObservedPairs(shopDomain,sourceId):{};
   const configFor=(set:typeof sets[number],desired:number,used:Set<string>)=>({
-    kind,mode:set.selectionMode,heading:set.heading,
+    kind,mode:set.selectionMode,heading:set.heading,targetMode:set.targetMode,
     maxItems:Math.max(1,Math.min(8,desired)),
     pinnedIds:array(set.pinnedIds),
     excludeTags:array(set.excludeTags),
@@ -56,7 +58,7 @@ export async function getRecommendations(
     excludeGroups:normaliseRuleGroups(set.excludeRules,set.excludeLogic),
     excludeOuterLogic:set.excludeLogic,
   });
-  type EngineItem={product:Product;evidence?:string;count?:number|null};
+  type EngineItem={product:Product;evidence?:string;count?:number|null;groupIndex?:number};
   type Contributor={set:typeof sets[number];items:EngineItem[];output:ReturnType<typeof recommend>};
   let contributions:Contributor[]=[];
   let trace:Array<{id:string;name:string;priority:number;status:string;
@@ -71,7 +73,7 @@ export async function getRecommendations(
       sets,source,sourceId,evaluateGroups,normaliseGroups:normaliseRuleGroups,
       max:addonLimit,previewSetId:options.previewSetId||null,
       recommendForSet:(set:typeof sets[number],requested:number,used:Set<string>)=>
-        recommend({sourceId,products,pairs,config:configFor(set,requested,used)})
+        recommendWithGroups({sourceId,products,pairs,config:configFor(set,requested,used)})
     });
     contributions=result.contributors as Contributor[];
     trace=result.trace as typeof trace;
@@ -137,7 +139,9 @@ export async function getRecommendations(
 
   const matchedSets=contributions.map(c=>({
     id:c.set.id,name:c.set.name,priority:c.set.priority,
-    productCount:c.items.length,requested:Math.min(c.set.maxItems,addonLimit)
+    productCount:c.items.length,requested:Math.min(c.set.maxItems,addonLimit),
+    groupContributions:Array.isArray((c.output as any).groupContributions)?
+      (c.output as any).groupContributions as Array<{index:number;requested:number;contributed:number}>:[]
   }));
   const warning=selected.length?null:
     trace.some(row=>row.decision==="stopped_empty")
@@ -149,7 +153,8 @@ export async function getRecommendations(
       reason:item.evidence==="merchant"?"Manually pinned"
         :item.evidence==="observed"?"Ordered together "+(item.count??0)+" times"
         :"Matched using product attributes",
-      ...(options.diagnostics?{sourceSetId:item.sourceSetId,sourceSetName:item.sourceSetName}:{})
+      ...(options.diagnostics?{sourceSetId:item.sourceSetId,sourceSetName:item.sourceSetName,
+        groupIndex:item.groupIndex??null}:{})
     })),
     source:kind==="bundle"?makeProduct(source):null,
     basis:hasObserved?"order_history":selected.some(item=>item.evidence==="merchant")?
