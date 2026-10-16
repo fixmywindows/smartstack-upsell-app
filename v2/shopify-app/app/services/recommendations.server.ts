@@ -1,6 +1,8 @@
 import db from "../db.server";
 import { normaliseRuleGroups } from "../utils/rule-groups";
 import { getObservedPairs } from "./order-signals.server";
+// @ts-ignore — signed, unit-tested token helpers.
+import { issueAttributionToken } from "./attribution-token.mjs";
 // @ts-ignore — pure, unit-tested grouped candidate selector.
 import { recommendWithGroups } from "./group-allocation.mjs";
 // @ts-ignore — pure JS engine, tested with Node.
@@ -143,6 +145,7 @@ export async function getRecommendations(
     groupContributions:Array.isArray((c.output as any).groupContributions)?
       (c.output as any).groupContributions as Array<{index:number;requested:number;contributed:number}>:[]
   }));
+  const signingSecret=process.env.SHOPIFY_API_SECRET||"";
   const warning=selected.length?null:
     trace.some(row=>row.decision==="stopped_empty")
       ?"The matching set stopped because no products were eligible."
@@ -150,6 +153,11 @@ export async function getRecommendations(
   return {
     heading,items:selected.slice(0,addonLimit).map(item=>({
       ...makeProduct(item.product),
+      trackingRef:(!options.diagnostics&&signingSecret.length>=16)
+        ?issueAttributionToken(signingSecret,{
+          shop:shopDomain,kind,source:sourceId,product:item.product.id,
+          set:item.sourceSetId,group:item.groupIndex??null
+        }):null,
       reason:item.evidence==="merchant"?"Manually pinned"
         :item.evidence==="observed"?"Ordered together "+(item.count??0)+" times"
         :"Matched using product attributes",
