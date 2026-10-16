@@ -158,7 +158,14 @@
     const buyButton=themeButtons();
     if(buyButton){
       const style=getComputedStyle(buyButton);
-      if(isOpaqueColor(style.backgroundColor)) bg=style.backgroundColor;
+      if(isOpaqueColor(style.backgroundColor))bg=style.backgroundColor;
+      else if(style.backgroundColor==='transparent' || /rgba\([^)]*,\s*0(?:\.0+)?\)/.test(style.backgroundColor)){
+        // Many Shopify product forms use transparent Add to Cart buttons with
+        // borders drawn by theme CSS. Keep them outlined instead of invisible.
+        bg='transparent';
+        border=isOpaqueColor(style.borderTopColor) && parseFloat(style.borderTopWidth)>0
+          ? style.borderTopColor : (style.color||'#24252a');
+      }
       if(isOpaqueColor(style.color)) fg=style.color;
       if(style.borderRadius && style.borderRadius!=='0px') radius=style.borderRadius;
       if(style.fontSize) size=style.fontSize;
@@ -171,6 +178,7 @@
     block.style.setProperty('--ss-button-bg',bg);
     block.style.setProperty('--ss-button-fg',fg);
     block.style.setProperty('--ss-button-border',border);
+    block.style.setProperty('--ss-button-outline',isOpaqueColor(bg)?bg:fg);
     block.style.setProperty('--ss-button-radius',radius);
     block.style.setProperty('--ss-button-size',size);
     const header=block.querySelector('.smartstack-recommendations__head');
