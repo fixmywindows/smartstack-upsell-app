@@ -6,6 +6,8 @@ import db from "../db.server";
 import { ensureShop } from "../services/catalogue.server";
 import { PLANS, canCreateSet, validPlan } from "../utils/plan-limits";
 import { groupsForEditor, countRuleConditions, type MatchGroup, type MatchRule } from "../utils/rule-groups";
+import { CatalogueChoice } from "../components/inline-rule-editor";
+import "../styles/rule-journey.css";
 
 const TYPES = [
   { id: "similar", label: "Similar products", heading: "Similar products" },
@@ -197,7 +199,7 @@ function RuleGroups({label,groups,onChange,outerLogic,setOuterLogic,keys,categor
   outerLogic:string;setOuterLogic:(v:string)=>void;keys:string[];categories:string[];
   remaining:number|null;excluded?:boolean;
 }){
-  const fieldOptions=[...FIELDS,...keys.map(key=>({value:"metafield:"+key,label:"Metafield: "+key}))];
+  const fieldOptions=[...FIELDS,{value:"metafield",label:"Metafield"}];
   const valueStyle={...selectStyle,minWidth:0};
   const canAdd=remaining===null||remaining>0;
   const updateGroup=(index:number,group:MatchGroup)=>{
@@ -250,10 +252,15 @@ function RuleGroups({label,groups,onChange,outerLogic,setOuterLogic,keys,categor
       {group.rules.map((rule,ri)=><div key={ri} style={{display:"grid",
         gridTemplateColumns:"repeat(auto-fit,minmax(135px,1fr))",gap:9,alignItems:"center"}}>
         <select aria-label={"Group "+(gi+1)+" attribute "+(ri+1)}
-          style={valueStyle} value={rule.field}
-          onChange={e=>updateRule(gi,ri,{field:e.target.value,value:"",op:"equals"})}>
+          style={valueStyle} value={rule.field.startsWith("metafield:")?"metafield":rule.field}
+          onChange={e=>updateRule(gi,ri,{field:e.target.value==="metafield"?"metafield:":e.target.value,
+            value:"",op:"contains"})}>
           {fieldOptions.map(f=><option key={f.value} value={f.value}>{f.label}</option>)}
         </select>
+        {rule.field.startsWith("metafield:")&&
+          <CatalogueChoice kind="metafields" label="metafield key"
+            value={rule.field.slice(10)} fallback={keys}
+            onChange={key=>updateRule(gi,ri,{field:"metafield:"+key,value:""})}/>}
         <select aria-label={"Group "+(gi+1)+" operator "+(ri+1)}
           style={valueStyle} value={rule.op}
           onChange={e=>updateRule(gi,ri,{op:e.target.value})}>
@@ -266,24 +273,29 @@ function RuleGroups({label,groups,onChange,outerLogic,setOuterLogic,keys,categor
           :rule.field==="available"?
           <select aria-label={"Availability value "+(ri+1)} style={valueStyle}
             value={String(rule.value)} onChange={e=>updateRule(gi,ri,{value:e.target.value})}>
-            <option value="">Choose status</option>
+            <option value="">Choose availability</option>
             <option value="true">Available</option>
             <option value="false">Unavailable</option>
           </select>
-          :rule.field==="category"?
-          <select aria-label={"Category value "+(ri+1)} style={valueStyle}
-            value={String(rule.value)} onChange={e=>updateRule(gi,ri,{value:e.target.value})}>
-            <option value="">Choose a category</option>
-            {categories.map(category=><option key={category} value={category}>{category}</option>)}
-            {rule.value&&!categories.includes(String(rule.value))&&
-              <option value={String(rule.value)}>{String(rule.value)}</option>}
-          </select>
-          :<input aria-label={"Condition value "+(ri+1)} style={valueStyle}
+          :rule.field==="price"||rule.field.startsWith("metafield:")&&["gte","lte"].includes(rule.op)?
+          <input aria-label={"Numeric condition "+(ri+1)} style={valueStyle}
             type={rule.field==="price"?"number":"text"}
-            step={rule.field==="price"?"0.01":undefined}
-            min={rule.field==="price"?"0":undefined}
-            value={String(rule.value)} placeholder={rule.field.startsWith("metafield:")?
-              "Metafield value":rule.field==="price"?"Price in store currency":"Value"}
+            step={rule.field==="price"?"0.01":undefined} min={rule.field==="price"?"0":undefined}
+            value={String(rule.value)} placeholder={rule.field==="price"?"Price in store currency":"Numeric metafield value"}
+            onChange={e=>updateRule(gi,ri,{value:e.target.value})}/>
+          :(["tags","collections","category","vendor","product_type"].includes(rule.field)||
+            rule.field.startsWith("metafield:"))?
+          <CatalogueChoice key={rule.field}
+            kind={rule.field.startsWith("metafield:")?"values":rule.field as
+              "tags"|"collections"|"category"|"vendor"|"product_type"}
+            metafieldKey={rule.field.startsWith("metafield:")?rule.field.slice(10):""}
+            fallback={rule.field==="category"?categories:[]}
+            label={rule.field.startsWith("metafield:")?"metafield value":rule.field==="collections"?
+              "collection":rule.field==="tags"?"tag":rule.field.replace("_"," ")}
+            value={String(rule.value)} onChange={value=>updateRule(gi,ri,{value})}/>
+          :<input aria-label={"Condition value "+(ri+1)} style={valueStyle}
+            type="text" value={String(rule.value)} maxLength={160}
+            placeholder="Enter text or fragment"
             onChange={e=>updateRule(gi,ri,{value:e.target.value})}/>}
         <button type="button" style={{...buttonStyle,color:"#a43731"}}
           onClick={()=>removeCondition(gi,ri)} aria-label={"Remove condition "+(ri+1)}>
