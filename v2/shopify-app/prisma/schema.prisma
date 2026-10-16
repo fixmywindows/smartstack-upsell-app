@@ -169,6 +169,7 @@ model RecommendationRuleSet {
   excludeRules     Json         @default("[]")
   excludeLogic     String       @default("OR")  // Combine exclusion groups
   fallbackMode     String       @default("next") // next matching set, or stop
+  bundleDiscountPercent Int     @default(0) // Preview only; Functions activation is separate
   maxItems         Int          @default(3)
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
