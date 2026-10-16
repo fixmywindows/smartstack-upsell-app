@@ -285,7 +285,13 @@
 
   function makeCardCollection(block, items) {
     const grid = create('div', 'smartstack-recommendations__products');
-    const layout = block.__ssDesign?.layout || 'grid';
+    let layout = block.__ssDesign?.layout || 'grid';
+    // Previously 'Bought together' defaulted to a narrow list, even when
+    // placed as a full-width shelf. Match the native product grid on wide rows.
+    if(layout==='compact' && block.__ssDesign?.preset==='theme'
+      && block.getBoundingClientRect().width>=700){
+      layout='grid';
+    }
     grid.dataset.layout = layout;
     for (const item of items) {
       if (!item.available) continue;
