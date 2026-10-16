@@ -8,7 +8,8 @@ export type Kind = typeof KIND_OPTIONS[number];
 export type { MatchRule, MatchGroup };
 const ALLOWED_FIELDS = new Set(["tags","title","category","product_type","vendor","collections","price","available"]);
 const ALLOWED_OPERATORS = new Set([
-  "equals","not_equals","contains","not_contains","any_of","all_of","gte","lte","exists","not_exists"
+  "equals","not_equals","contains","not_contains","starts_with","ends_with",
+  "not_starts_with","not_ends_with","any_of","all_of","gte","lte","exists","not_exists"
 ]);
 
 export class FormValidationError extends Error {

@@ -58,6 +58,10 @@ export function evaluateRule(product, rule) {
     case 'equals': return actualList.some(v=>compare(v,expected));
     case 'not_equals': return actualList.every(v=>!compare(v,expected));
     case 'contains': return actualList.some(v=>String(v).toLowerCase().includes(String(expected ?? '').toLowerCase()));
+    case 'starts_with': return actualList.some(v=>String(v).toLowerCase().startsWith(String(expected ?? '').toLowerCase()));
+    case 'ends_with': return actualList.some(v=>String(v).toLowerCase().endsWith(String(expected ?? '').toLowerCase()));
+    case 'not_starts_with': return actualList.every(v=>!String(v).toLowerCase().startsWith(String(expected ?? '').toLowerCase()));
+    case 'not_ends_with': return actualList.every(v=>!String(v).toLowerCase().endsWith(String(expected ?? '').toLowerCase()));
     case 'not_contains': return actualList.every(v=>!String(v).toLowerCase().includes(String(expected ?? '').toLowerCase()));
     case 'any_of': return actualList.some(v => toStrings(expected).includes(String(v).toLowerCase()));
     case 'all_of': return toStrings(expected).every(v=>actualList.map(x=>String(x).toLowerCase()).includes(v));
