@@ -143,9 +143,9 @@ export default function RecommendationPreview() {
                     {" "}Repeated products are removed. Unfilled slots may be filled by later matching sets.
                   </p>
                 </div>
-                {data.result.matchedSets?.length>0&&<div style={{display:"grid",gap:7,marginBottom:15}}>
+                {Boolean(data.result.matchedSets?.length)&&<div style={{display:"grid",gap:7,marginBottom:15}}>
                   <strong style={{fontSize:13}}>Products allocated by rule</strong>
-                  {data.result.matchedSets.map((set,index)=><div key={set.id}
+                  {data.result.matchedSets?.map((set,index)=><div key={set.id}
                     style={{display:"flex",alignItems:"center",justifyContent:"space-between",
                       borderRadius:9,padding:"9px 12px",background:index%2===0?"#f8f7fd":"#f2fbf7",
                       gap:12}}>
