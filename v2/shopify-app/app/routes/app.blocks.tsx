@@ -107,7 +107,7 @@ export const action=async({request}:ActionFunctionArgs)=>{
         heading:TYPES.find(t=>t.id===kind)!.name,
         enabled:"",priority:"50",sourceMatch:"all",sourceProductIds:"[]",
         sourceRules:"[]",sourceLogic:"AND",selectionMode:"hybrid",pinnedIds:"[]",
-        targetRules:"[]",targetLogic:"AND",excludeRules:"[]",excludeLogic:"OR",
+        targetRules:"[]",targetLogic:"AND",targetMode:"filter",excludeRules:"[]",excludeLogic:"OR",
         excludeTags:"",excludedProductIds:"[]",fallbackMode:"next",
         maxItems:kind==="bundle"?"2":"3",bundleDiscountPercent:"0"
       };
@@ -140,6 +140,7 @@ export const action=async({request}:ActionFunctionArgs)=>{
         pinnedIds:String(form.get("pinnedIds")??arrayValue(record.pinnedIds)),
         targetRules:String(form.get("targetRules")??JSON.stringify(groupsForEditor(record.targetRules,record.targetLogic))),
         targetLogic:String(form.get("targetLogic")??record.targetLogic),
+        targetMode:String(form.get("targetMode")??record.targetMode),
         excludeTags:strings(record.excludeTags).join(","),
         excludedProductIds:arrayValue(record.excludedProductIds),
         excludeRules:JSON.stringify(groupsForEditor(record.excludeRules,record.excludeLogic)),
@@ -259,8 +260,10 @@ export default function MerchandisingStudio(){
               strings(set.sourceProductIds).length+" hand-picked trigger product(s)":
               summaryRules(set.sourceRules,set.sourceLogic)||"Choose a trigger";
             const target=summaryRules(set.targetRules,set.targetLogic);
+            const allocations=normaliseRuleGroups(set.targetRules,set.targetLogic)
+              .map((group,i)=>"Group "+(i+1)+": "+(group.maxItems??1)).join(" · ");
             const pinnedIds=strings(set.pinnedIds);
-            const targetText=target|| (set.selectionMode==="manual"?
+            const targetText=(set.targetMode==="allocate" && allocations?allocations:target)|| (set.selectionMode==="manual"?
               pinnedIds.length+" handpicked products":set.selectionMode==="hybrid"?
               "Handpicked + catalogue matches":"Automatic catalogue matches");
             const sourceCount=set.sourceMatch==="rules"?countRuleConditions(
@@ -278,6 +281,7 @@ export default function MerchandisingStudio(){
                   <div className="ssr-row-metadata">
                     <span>Priority {set.priority}</span><span>Up to {Math.min(set.kind==="bundle"?7:8,set.maxItems)} from this row</span>
                     <span>{sourceCount+targetCount} conditions</span>
+                    {set.targetMode==="allocate"&&<span>Group allocations enabled</span>}
                     {set.legacyBlockId&&<span>Imported default</span>}
                   </div>
                 </div>
