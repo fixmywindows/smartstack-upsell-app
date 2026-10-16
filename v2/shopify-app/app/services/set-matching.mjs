@@ -111,7 +111,7 @@ export function resolveRuleSets({
  */
 export function aggregateRuleSets({
   sets, source, sourceId, evaluateGroups, normaliseGroups, recommendForSet,
-  max=8, previewSetId=null,
+  max=8, previewSetId=/** @type {string | null} */ (null),
 }) {
   const blockLimit=Math.max(0,Math.min(8,Math.floor(Number(max) || 0)));
   const trace=[], items=[], contributors=[];
