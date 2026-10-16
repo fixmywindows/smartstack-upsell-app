@@ -174,3 +174,31 @@ test("an empty draft preview explains preview isolation without overriding saved
   assert.match(message,/Selected preview has no eligible/);
   assert.doesNotMatch(message,/configured to stop/);
 });
+
+test("Starts/ends operators work with titles, tags and metafields regardless of case",()=>{
+  assert.equal(evaluateRule(source,rule("title","starts_with","win")),true);
+  assert.equal(evaluateRule(source,rule("title","ends_with","BOARD")),true);
+  assert.equal(evaluateRule(source,rule("tags","starts_with","snow")),true);
+  assert.equal(evaluateRule(source,rule("metafield:spec.level","ends_with","DIATE")),true);
+  assert.equal(evaluateRule(source,rule("title","not_starts_with","sum")),true);
+  assert.equal(evaluateRule(source,rule("title","not_ends_with","boot")),true);
+  assert.equal(evaluateRule(source,rule("title","not_starts_with","WIN")),false);
+  assert.equal(evaluateRule(source,rule("title","not_ends_with","BOARD")),false);
+});
+
+test("merchant THEN conditions can produce cross-category candidate matches in every block type",()=>{
+  const other={...board,id:"helmet",title:"Winter helmet",category:"helmets",productType:"helmet",
+    tags:["safety"],priceCents:5000};
+  for(const kind of ["similar","complement","bought_together","bundle"]){
+    const result=recommend({sourceId:"source",products:[source,other,cheapBoard],config:{
+      kind,mode:"ai",maxItems:3,
+      ruleGroups:[group("AND",rule("tags","contains","safety"))],
+      ruleOuterLogic:"AND"
+    }});
+    assert.deepEqual(result.items.map(item=>item.product.id),["helmet"],kind);
+    if(kind==="bought_together") {
+      assert.equal(result.basis,"cold_start");
+      assert.doesNotMatch(result.heading,/frequently/i);
+    }
+  }
+});

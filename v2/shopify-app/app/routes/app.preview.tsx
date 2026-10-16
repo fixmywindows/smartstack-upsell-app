@@ -46,7 +46,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     try {
       // This import must remain inside the server-only loader, never in the UI.
       const { getRecommendations } = await import("../services/recommendations.server");
-      result = await getRecommendations(session.shop, sourceId, kind, 12, {
+      result = await getRecommendations(session.shop, sourceId, kind, 8, {
         diagnostics: true, previewSetId: selectedSet?.id || null,
       });
     } catch (cause) {
@@ -130,6 +130,31 @@ export default function RecommendationPreview() {
             data.error ? <p role="alert">{data.error}</p> :
               data.result?.items.length ? <>
                 <h3 style={{ fontSize: 17, marginBottom: 8 }}>{data.result.heading}</h3>
+                <div style={{background:"#f6f3ff",border:"1px solid #ddd5fa",
+                  borderRadius:12,padding:"12px 15px",marginBottom:16}}>
+                  <strong style={{fontSize:15}}>One storefront block · {data.result.allocatedSlots ?? data.result.items.length} / 8 products</strong>
+                  <div style={{display:"flex",gap:5,margin:"12px 0"}}>
+                    {Array.from({length:8},(_,index)=><span key={index}
+                      style={{display:"block",flex:1,height:9,borderRadius:7,
+                        background:index<(data.result?.allocatedSlots??0)?"#775ee3":"#e3dff0"}}/>)}
+                  </div>
+                  <p style={{...textSmall,margin:0}}>
+                    {data.kind==="bundle"?"Main product occupies one slot. Remaining slots are add-ons.":"Matching IF → THEN rules contribute products in priority order."}
+                    {" "}Repeated products are removed. Unfilled slots may be filled by later matching sets.
+                  </p>
+                </div>
+                {Boolean(data.result.matchedSets?.length)&&<div style={{display:"grid",gap:7,marginBottom:15}}>
+                  <strong style={{fontSize:13}}>Products allocated by rule</strong>
+                  {data.result.matchedSets?.map((set,index)=><div key={set.id}
+                    style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+                      borderRadius:9,padding:"9px 12px",background:index%2===0?"#f8f7fd":"#f2fbf7",
+                      gap:12}}>
+                    <span style={{fontSize:13,fontWeight:600}}>{set.name}</span>
+                    <span style={{fontSize:12,fontWeight:700}}>
+                      {set.productCount} added · Priority {set.priority}
+                    </span>
+                  </div>)}
+                </div>}
                 {data.result.matchedSet && <p style={{...textSmall,
                   background:"#eff6f2",color:"#17603b",display:"inline-block",padding:"7px 10px",borderRadius:7}}>
                   Matched set: {data.result.matchedSet.name} · Priority {data.result.matchedSet.priority}

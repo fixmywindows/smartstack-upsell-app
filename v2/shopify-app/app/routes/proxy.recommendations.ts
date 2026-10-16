@@ -14,7 +14,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (!numericId || !/^\d{1,20}$/.test(numericId) || !BLOCK_KINDS.includes(kind as BlockKind)) {
     return Response.json({ error: "Invalid product or block type" }, { status: 400 });
   }
-  const max = Math.max(1, Math.min(12, Number(url.searchParams.get("max")) || 4));
+  const max = Math.max(1, Math.min(8, Number(url.searchParams.get("max")) || 8));
   const sourceId = "gid://shopify/Product/" + numericId;
   try {
     const [result, savedDesign] = await Promise.all([

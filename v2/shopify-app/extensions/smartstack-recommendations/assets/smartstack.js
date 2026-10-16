@@ -349,7 +349,7 @@
   function makeBundle(block, data) {
     const source = data.source;
     if (!source || !validVariantId(source.variantId)) return null;
-    const candidates = data.items.filter(item => item.available && validVariantId(item.variantId)).slice(0, 3);
+    const candidates = data.items.filter(item => item.available && validVariantId(item.variantId)).slice(0, 7);
     if (!candidates.length) return null;
     const wrap = create('div', 'smartstack-recommendations__bundle');
     wrap.dataset.layout=block.__ssDesign?.bundleLayout==='cards'?'cards':'list';

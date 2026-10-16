@@ -96,3 +96,88 @@ export function resolveRuleSets({
   }
   return {selection:null,trace};
 }
+
+
+/**
+ * Assemble one storefront block from several matching IF→THEN rows.
+ *
+ * max counts RECOMMENDATION slots (not the current product). For bundles the
+ * server passes at most 7 slots so main product + 7 add-ons <= 8 total.
+ * Each row contributes at most its own maxItems, in priority order.
+ * Excluded/unpublished products must already be filtered by recommendForSet.
+ * A secondary ID deduplication guard prevents repeating products between rows.
+ *
+ * No state is mutated, and previewSetId can simulate an inactive draft.
+ */
+export function aggregateRuleSets({
+  sets, source, sourceId, evaluateGroups, normaliseGroups, recommendForSet,
+  max=8, previewSetId=/** @type {string | null} */ (null),
+}) {
+  const blockLimit=Math.max(0,Math.min(8,Math.floor(Number(max) || 0)));
+  const trace=[], items=[], contributors=[];
+  const usedIds=new Set([sourceId]);
+  for(const set of sortRuleSets(sets)){
+    const row={
+      id:set.id,name:set.name,priority:set.priority,
+      status:set.archived?'archived':set.enabled?'active':'draft',
+      requested:0,productCount:0,sourceMatched:false,
+      decision:'skipped',reason:''
+    };
+    if(items.length>=blockLimit){
+      row.reason='Block is full ('+blockLimit+' products)';
+      row.decision='full';trace.push(row);continue;
+    }
+    if(set.archived){
+      row.reason='Archived set';trace.push(row);continue;
+    }
+    if(previewSetId && set.id!==previewSetId){
+      row.reason='Another set selected for preview';trace.push(row);continue;
+    }
+    if(!previewSetId && !set.enabled){
+      row.reason='Set paused or still a draft';trace.push(row);continue;
+    }
+    const applies=ruleSetApplies(set,source,sourceId,evaluateGroups,normaliseGroups);
+    row.sourceMatched=applies.matched;
+    if(!applies.matched){
+      row.decision='source_mismatch';
+      row.reason=applies.reason;trace.push(row);continue;
+    }
+    const remaining=blockLimit-items.length;
+    const perSet=Math.max(1,Math.min(8,Math.floor(Number(set.maxItems)||1)));
+    row.requested=Math.min(perSet,remaining);
+    const output=recommendForSet(set,row.requested,new Set(usedIds));
+    const unique=[];
+    for(const entry of (output?.items||[])){
+      const id=entry?.product?.id;
+      if(!id || usedIds.has(id))continue;
+      unique.push(entry);
+      usedIds.add(id);
+      if(unique.length===row.requested)break;
+    }
+    row.productCount=unique.length;
+    if(unique.length){
+      items.push(...unique);
+      contributors.push({set,items:unique,output});
+      row.decision='contributed';
+      row.reason='Contributed '+unique.length+' of '+row.requested+' requested product(s)';
+      trace.push(row);
+      // Continue into the next matching IF→THEN row until the ONE block is full.
+      if(previewSetId)break;
+      continue;
+    }
+    if(previewSetId){
+      row.decision='empty_preview';
+      row.reason='This draft has no eligible results; other sets were not simulated';
+      trace.push(row);break;
+    }
+    if(set.fallbackMode==='stop'){
+      row.decision='stopped_empty';
+      row.reason='No eligible recommendations; this row is configured to stop further fallback';
+      trace.push(row);break;
+    }
+    row.decision='fallback';
+    row.reason='No eligible recommendations; checking the next matching set';
+    trace.push(row);
+  }
+  return {items,contributors,trace,blockLimit};
+}

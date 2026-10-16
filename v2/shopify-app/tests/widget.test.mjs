@@ -75,3 +75,10 @@ test('Shopify range settings offer at least three selectable values', () => {
   assert.equal(mobile.type, 'select');
   assert.deepEqual(mobile.options.map(o => o.value), ['1', '2']);
 });
+
+test('every storefront block has an eight-product cap, with bundle source included',()=>{
+  const limit = setting('max_items');
+  assert.equal(limit.max,8);
+  assert.equal(limit.default,8);
+  assert.match(js,/\.slice\(0, 7\)/);
+});

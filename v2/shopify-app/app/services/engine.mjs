@@ -58,6 +58,10 @@ export function evaluateRule(product, rule) {
     case 'equals': return actualList.some(v=>compare(v,expected));
     case 'not_equals': return actualList.every(v=>!compare(v,expected));
     case 'contains': return actualList.some(v=>String(v).toLowerCase().includes(String(expected ?? '').toLowerCase()));
+    case 'starts_with': return actualList.some(v=>String(v).toLowerCase().startsWith(String(expected ?? '').toLowerCase()));
+    case 'ends_with': return actualList.some(v=>String(v).toLowerCase().endsWith(String(expected ?? '').toLowerCase()));
+    case 'not_starts_with': return actualList.every(v=>!String(v).toLowerCase().startsWith(String(expected ?? '').toLowerCase()));
+    case 'not_ends_with': return actualList.every(v=>!String(v).toLowerCase().endsWith(String(expected ?? '').toLowerCase()));
     case 'not_contains': return actualList.every(v=>!String(v).toLowerCase().includes(String(expected ?? '').toLowerCase()));
     case 'any_of': return actualList.some(v => toStrings(expected).includes(String(v).toLowerCase()));
     case 'all_of': return toStrings(expected).every(v=>actualList.map(x=>String(x).toLowerCase()).includes(v));
@@ -145,7 +149,7 @@ export function recommend({sourceId,products,config,pairs={},semanticScores={}})
   const mode = config.mode ?? MODES.HYBRID;
   if (!Object.values(BLOCK_TYPES).includes(kind)) throw new Error('Unknown block type');
   if (!Object.values(MODES).includes(mode)) throw new Error('Unknown selection mode');
-  const max = Math.max(1,Math.min(kind===BLOCK_TYPES.BUNDLE?3:12,Math.floor(Number(config.maxItems ?? 4))));
+  const max = Math.max(1,Math.min(kind===BLOCK_TYPES.BUNDLE?7:8,Math.floor(Number(config.maxItems ?? 4))));
   const byId = new Map(products.map(p=>[p.id,p]));
   const pool = products.filter(p=>eligible(source,p,config));
   const allowed = new Set(pool.map(p=>p.id));
@@ -157,6 +161,13 @@ export function recommend({sourceId,products,config,pairs={},semanticScores={}})
   let basis = 'attributes';
   let warning = null;
 
+  // Explicit THEN-conditions are merchant targeting rules: they must be able
+  // to produce matching products even when no hard-coded category pairing exists.
+  // Hard availability, exclusions and compatibility were already checked in pool.
+  const hasTargetRules = (config.ruleGroups ?? []).some(g=>Array.isArray(g.rules) && g.rules.length>0);
+  const ruleRank = candidate => 80
+    + (source.category === candidate.category ? 15 : 0)
+    + overlap(source,candidate)*12;
   if (mode !== MODES.MANUAL) {
     for(const candidate of pool) {
       if (used.has(candidate.id)) continue;
@@ -167,6 +178,7 @@ export function recommend({sourceId,products,config,pairs={},semanticScores={}})
         const pair=coPurchased(source,candidate,pairs);
         if(pair) ({score,evidence,count}=pair);
       }
+      if (!Number.isFinite(score) && hasTargetRules) score=ruleRank(candidate);
       // Semantic scoring is additive AFTER hard eligibility/compatibility checks.
       // It must come from an approved, cached model and cannot bypass merchant rules.
       if(Number.isFinite(score)) {
@@ -175,18 +187,26 @@ export function recommend({sourceId,products,config,pairs={},semanticScores={}})
       }
     }
     auto.sort((a,b)=>b.score-a.score || a.product.id.localeCompare(b.product.id));
-    if (kind === BLOCK_TYPES.BOUGHT_TOGETHER && !auto.length) {
-      // Never claim order-history evidence that does not exist.
-      heading = 'Pairs well with';
-      basis = 'cold_start';
-      warning = 'Insufficient order history: showing inferred complementary products instead.';
-      for(const p of pool){const score=complementary(source,p);if(Number.isFinite(score))auto.push({product:p,score,evidence:'inferred',count:null});}
-      auto.sort((a,b)=>b.score-a.score || a.product.id.localeCompare(b.product.id));
-    } else if(kind===BLOCK_TYPES.BOUGHT_TOGETHER) basis='order_history';
+    if (kind === BLOCK_TYPES.BOUGHT_TOGETHER) {
+      // Distinguish evidence-backed co-purchases from catalogue guesses.
+      const hasObserved = auto.some(item=>item.evidence==='observed');
+      if (!hasObserved) {
+        heading = 'Pairs well with';
+        basis = 'cold_start';
+        warning = 'No verified order pairs yet: showing eligible catalogue matches.';
+        if (!auto.length) {
+          for(const p of pool){
+            const score=complementary(source,p);
+            if(Number.isFinite(score))auto.push({product:p,score,evidence:'inferred',count:null});
+          }
+          auto.sort((a,b)=>b.score-a.score || a.product.id.localeCompare(b.product.id));
+        }
+      } else basis='order_history';
+    }
   }
   let items=[...pinned,...auto].slice(0,max);
   if(kind===BLOCK_TYPES.BOUGHT_TOGETHER && mode===MODES.HYBRID && pinned.length && auto.length){
-    heading='Frequently bought together and hand-picked';
+    heading=basis==='order_history'?'Frequently bought together and hand-picked':'Pairs well with';
   }
   if(kind===BLOCK_TYPES.BOUGHT_TOGETHER && mode===MODES.MANUAL){
     heading='Recommended together'; basis='merchant';
@@ -199,7 +219,7 @@ export function recommend({sourceId,products,config,pairs={},semanticScores={}})
  * Checkout application of the discount must be separately verified via Shopify Functions.
  */
 export function bundleTotals({items,selectedIds,discount={type:'none',value:0},requireAll=true}) {
-  if(!Array.isArray(items)||items.length<2||items.length>4)throw new Error('Bundle must contain 2–4 products');
+  if(!Array.isArray(items)||items.length<2||items.length>8)throw new Error('Bundle must contain 2–8 products');
   const selected=new Set(selectedIds);
   const chosen=items.filter(item=>selected.has(item.id));
   const subtotalCents=chosen.reduce((sum,item)=>sum+Math.max(0,Math.round(item.priceCents)),0);

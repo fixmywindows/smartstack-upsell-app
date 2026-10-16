@@ -4,6 +4,7 @@ import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { ensureShop } from "../services/catalogue.server";
 import { PLANS, validPlan } from "../utils/plan-limits";
+import "../styles/rule-journey.css";
 
 const blocks = [
   { kind: "similar", label: "Similar products", description: "Show relevant alternatives", icon: "◈" },
@@ -49,13 +50,28 @@ const linkButton: React.CSSProperties = {
 export default function Dashboard(){
   const data=useLoaderData<typeof loader>();
   return <s-page heading="SmartStack">
-    <s-section heading="Smarter recommendations, simpler merchandising">
+    <div className="ssr-workspace" style={{paddingBottom:0}}>
+      <div className="ssr-hero" style={{marginBottom:18}}>
+        <div>
+          <div className="ssr-hero-kicker">SmartStack Merchandising Studio</div>
+          <h2>Better recommendations. Simpler rules.</h2>
+          <p>Tell SmartStack what to do in one sentence: IF a product matches your conditions,
+            THEN show the right products. Several rules can fill the same eight-product block.</p>
+        </div>
+        <div className="ssr-hero-stats">
+          <div className="ssr-hero-stat"><b>{data.activeSets}</b><span>Active rules</span></div>
+          <div className="ssr-hero-stat"><b>{data.productCount}</b><span>Synced products</span></div>
+          <div className="ssr-hero-stat"><b>8</b><span>Products per block</span></div>
+        </div>
+      </div>
+    </div>
+    <s-section heading="Build your next recommendation">
       <p style={{...small,maxWidth:650,marginBottom:17}}>
-        Control what customers see with hand-picked products, automatic matching and product rules.
-        Start with a recommendation type, create a set, then preview it before publishing.
+        Use the colourful IF → THEN workspace to add targeting conditions, choose
+        the matching products and assign each rule a contribution to your shared block.
       </p>
       <div style={{display:"flex",flexWrap:"wrap",gap:10}}>
-        <Link to="/app/blocks" style={linkButton}>Manage recommendation sets →</Link>
+        <Link to="/app/blocks" style={linkButton}>Open rule builder →</Link>
         <Link to="/app/preview" style={{...linkButton,background:"#fff",color:"#24272d",
           border:"1px solid #cfd4db"}}>Preview product matches</Link>
       </div>
@@ -97,7 +113,7 @@ export default function Dashboard(){
       <div style={{...card,maxWidth:860}}>
         {[
           ["1","Sync products","Import your catalogue, including tags, metafields, images and availability.","/app/catalogue"],
-          ["2","Create a recommendation set","Pick the source products and matching strategy, then save a draft.","/app/blocks"],
+          ["2","Build IF → THEN rules","Define where to show suggestions, what products qualify and how many slots they can use.","/app/blocks"],
           ["3","Preview matched products","Check suitability and make changes before visitors see it.","/app/preview"],
           ["4","Add a theme block","In Shopify's theme editor, place Smart recommendations on a product page.","/app/blocks"]
         ].map(([number,title,description,url],index)=><div key={number} style={{

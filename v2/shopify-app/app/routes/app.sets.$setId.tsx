@@ -35,6 +35,10 @@ const OPERATORS = [
   {value:"not_equals",label:"Does not equal"},
   {value:"contains",label:"Contains"},
   {value:"not_contains",label:"Does not contain"},
+  {value:"starts_with",label:"Starts with"},
+  {value:"ends_with",label:"Ends with"},
+  {value:"not_starts_with",label:"Does not start with"},
+  {value:"not_ends_with",label:"Does not end with"},
   {value:"any_of",label:"Is any of (comma-separated)"},
   {value:"all_of",label:"Includes all of (comma-separated)"},
   {value:"gte",label:"Greater than or equal to"},
@@ -433,7 +437,7 @@ export default function SetEditor(){
             </label>
             <label style={labelStyle}>Maximum add-ons
               <input type="number" name="maxItems" style={{...selectStyle,marginTop:6}}
-                min={1} max={data.kind==="bundle"?3:12} value={maxItems}
+                min={1} max={data.kind==="bundle"?7:8} value={maxItems}
                 onChange={e=>setMaxItems(Number(e.target.value))}/>
             </label>
           </div>
