@@ -46,7 +46,7 @@ test("each set has its own contribution limit and server enforces max eight",()=
   assert.equal(schema.settings.find(s=>s.id==="max_items").max,8);
   assert.equal(schema.settings.find(s=>s.id==="max_items").default,8);
   assert.match(proxy,/Math\.min\(8,/);
-  assert.match(widget,/\.slice\(0, 7\)/);
+  assert.match(widget,/\.slice\(0,\s*7\)/);
 });
 test("colour, visual motion and accessibility all exist in the workspace",()=>{
   assert.match(css,/linear-gradient/);
