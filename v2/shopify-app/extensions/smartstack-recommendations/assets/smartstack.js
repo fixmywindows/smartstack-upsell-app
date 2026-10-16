@@ -3,7 +3,7 @@
  * Each block initialises independently, including re-rendered theme-editor blocks.
  */
 (() => {
-  const PREVIEW_VERSION = '0.3.0';
+  const PREVIEW_VERSION = '0.3.1';
   const previous = window.__smartstackRenderer;
   if (previous?.version === PREVIEW_VERSION) { previous.scan(); return; }
   previous?.dispose?.();
@@ -135,7 +135,7 @@
       design.imageRatio==='portrait'?'4 / 5':design.imageRatio==='landscape'?'4 / 3':'1 / 1');
     block.style.setProperty('--ss-image-fit',design.imageFit);
 
-    let bg='#24252a',fg='#fff',radius=design.cardRadius+'px',size='.875rem',border='transparent';
+    let bg='#24252a',fg='#fff',radius=design.cardRadius+'px',size='14px',border='transparent';
     const buyButton=themeButtons();
     if(buyButton){
       const style=getComputedStyle(buyButton);
