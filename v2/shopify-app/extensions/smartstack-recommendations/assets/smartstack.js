@@ -149,9 +149,21 @@
     for(const [selector,property,min,max] of references){
       const node=document.querySelector(selector);
       if(!node||node.closest('[data-smartstack-block]'))continue;
-      const px=parseFloat(getComputedStyle(node).fontSize);
+      const computed=getComputedStyle(node);
+      const px=parseFloat(computed.fontSize);
       if(Number.isFinite(px))block.style.setProperty(property,
         Math.max(min,Math.min(max,px))+'px');
+      if(property==='--ss-heading-size'){
+        block.style.setProperty('--ss-heading-font',computed.fontFamily);
+        block.style.setProperty('--ss-heading-weight',computed.fontWeight);
+        block.style.setProperty('--ss-heading-line-height',computed.lineHeight);
+        block.style.setProperty('--ss-heading-letter-spacing',computed.letterSpacing);
+      }else if(property==='--ss-card-title-size'){
+        block.style.setProperty('--ss-card-font',computed.fontFamily);
+        block.style.setProperty('--ss-card-title-weight',computed.fontWeight);
+      }else if(property==='--ss-price-size'){
+        block.style.setProperty('--ss-price-weight',computed.fontWeight);
+      }
     }
 
     let bg='#24252a',fg='#fff',radius=design.cardRadius+'px',size='14px',border='transparent';
