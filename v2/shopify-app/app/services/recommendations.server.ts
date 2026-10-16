@@ -83,7 +83,7 @@ export async function getRecommendations(
 
   const annotated=contributions.flatMap(({set,items})=>
     items.map(item=>({...item,sourceSetId:set.id,sourceSetName:set.name})));
-  const legacyAnnotated=(legacyOutput?.items||[]).map((item:EngineItem)=>({
+  const legacyAnnotated=((legacyOutput?.items||[]) as EngineItem[]).map(item=>({
     ...item,sourceSetId:"legacy",sourceSetName:"Original configuration"
   }));
   const selected=annotated.length?annotated:legacyAnnotated;
