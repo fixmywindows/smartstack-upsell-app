@@ -129,11 +129,30 @@
     block.dataset.ssPreset=design.preset||'theme';
     block.style.setProperty('--ss-gap',design.cardGap+'px');
     block.style.setProperty('--ss-radius',design.cardRadius+'px');
-    block.style.setProperty('--ss-cols',String(design.desktopColumns));
+    // Match the four-column product shelf used by the merchant's theme.
+    // Narrow app placements still switch layouts through container queries.
+    block.style.setProperty('--ss-cols',String(
+      design.preset==='theme' && block.dataset.styleSource!=='block'
+        ? 4 : design.desktopColumns
+    ));
     block.style.setProperty('--ss-mobile-cols',String(design.mobileColumns));
     block.style.setProperty('--ss-image-ratio',
       design.imageRatio==='portrait'?'4 / 5':design.imageRatio==='landscape'?'4 / 3':'1 / 1');
     block.style.setProperty('--ss-image-fit',design.imageFit);
+    // Read computed styles from real theme product cards, rather than using
+    // rem sizes that can shrink to 9px on Shopify's 10px-root themes.
+    const references=[
+      ['.related-products h2, .related-products__heading','--ss-heading-size',18,36],
+      ['.related-products .card__heading, .product-grid .card__heading','--ss-card-title-size',13,20],
+      ['.related-products .price-item, .product-grid .price-item','--ss-price-size',13,20]
+    ];
+    for(const [selector,property,min,max] of references){
+      const node=document.querySelector(selector);
+      if(!node||node.closest('[data-smartstack-block]'))continue;
+      const px=parseFloat(getComputedStyle(node).fontSize);
+      if(Number.isFinite(px))block.style.setProperty(property,
+        Math.max(min,Math.min(max,px))+'px');
+    }
 
     let bg='#24252a',fg='#fff',radius=design.cardRadius+'px',size='14px',border='transparent';
     const buyButton=themeButtons();
