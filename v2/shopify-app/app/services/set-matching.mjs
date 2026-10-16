@@ -113,7 +113,7 @@ export function aggregateRuleSets({
   sets, source, sourceId, evaluateGroups, normaliseGroups, recommendForSet,
   max=8, previewSetId=null,
 }) {
-  const blockLimit=Math.max(1,Math.min(8,Math.floor(Number(max)||8)));
+  const blockLimit=Math.max(0,Math.min(8,Math.floor(Number(max) || 0)));
   const trace=[], items=[], contributors=[];
   const usedIds=new Set([sourceId]);
   for(const set of sortRuleSets(sets)){
