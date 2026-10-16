@@ -3,7 +3,7 @@
  * Each block initialises independently, including re-rendered theme-editor blocks.
  */
 (() => {
-  const PREVIEW_VERSION = '0.4.0';
+  const PREVIEW_VERSION = '0.5.0';
   const previous = window.__smartstackRenderer;
   if (previous?.version === PREVIEW_VERSION) { previous.scan(); return; }
   previous?.dispose?.();
@@ -125,10 +125,21 @@
   function applyDesign(block,design) {
     block.__ssDesign=design;
     block.dataset.ssCardStyle=design.cardStyle;
+    block.dataset.ssHover=design.hoverEffect||"none";
+    block.dataset.ssShadow=design.shadow||"none";
+    block.dataset.ssTextAlign=design.textAlign||"left";
     block.dataset.ssButtonStyle=design.buttonStyle;
     block.dataset.ssPreset=design.preset||'theme';
     block.style.setProperty('--ss-gap',design.cardGap+'px');
     block.style.setProperty('--ss-radius',design.cardRadius+'px');
+    block.style.setProperty('--ss-border-width',Math.max(0,Math.min(3,Number(design.borderWidth)||0))+'px');
+    block.style.setProperty('--ss-card-padding',Math.max(0,Math.min(32,Number(design.cardPadding)||0))+'px');
+    block.style.setProperty('--ss-image-max',Math.max(80,Math.min(600,Number(design.imageMaxHeight)||440))+'px');
+    block.style.setProperty('--ss-card-background',design.cardBackground||'transparent');
+    block.style.setProperty('--ss-border-color',design.borderColor||'rgba(110,116,129,.22)');
+    block.style.setProperty('--ss-title-color',design.titleColor||'inherit');
+    block.style.setProperty('--ss-price-color',design.priceColor||'inherit');
+    block.style.setProperty('--ss-button-width',design.buttonFullWidth===false?'auto':'100%');
     // Match the four-column product shelf used by the merchant's theme.
     // Narrow app placements still switch layouts through container queries.
     block.style.setProperty('--ss-cols',String(
@@ -165,6 +176,16 @@
         block.style.setProperty('--ss-price-weight',computed.fontWeight);
       }
     }
+    if(design.headingFontSize>0)block.style.setProperty('--ss-heading-size',design.headingFontSize+'px');
+    if(design.titleFontSize>0)block.style.setProperty('--ss-card-title-size',design.titleFontSize+'px');
+    if(design.priceFontSize>0)block.style.setProperty('--ss-price-size',design.priceFontSize+'px');
+    if(design.headingFontWeight>0)block.style.setProperty('--ss-heading-weight',String(design.headingFontWeight));
+    if(design.titleFontWeight>0)block.style.setProperty('--ss-card-title-weight',String(design.titleFontWeight));
+    if(design.priceFontWeight>0)block.style.setProperty('--ss-price-weight',String(design.priceFontWeight));
+    block.style.setProperty('--ss-heading-italic',design.headingItalic?'italic':'normal');
+    block.style.setProperty('--ss-title-italic',design.titleItalic?'italic':'normal');
+    block.style.setProperty('--ss-price-italic',design.priceItalic?'italic':'normal');
+    if(design.headingColor)block.style.setProperty('--ss-heading-color',design.headingColor);
     if(design.preset==='theme' && block.dataset.styleSource!=='block'){
       const nativeGrid=document.querySelector('.related-products .grid, .related-products .product-grid');
       if(nativeGrid){
@@ -300,6 +321,7 @@
     const href=safePath(item.url);
     if(!href)return null;
     const article=create('article','smartstack-recommendations__item');
+    const design=block.__ssDesign||{};
     const media=create('a','smartstack-recommendations__media');
     media.href=href;
     media.setAttribute('aria-label','View '+(item.title||'product'));
@@ -309,13 +331,14 @@
       image.alt=item.title||'Product';image.loading='lazy';image.decoding='async';
       media.append(image);
     }else media.append(create('div','smartstack-recommendations__image-fallback','Image coming soon'));
-    article.append(media);
+    if(design.showImage!==false)article.append(media);
     const detail=create('div','smartstack-recommendations__detail');
     const link=create('a','smartstack-recommendations__product-link');
     link.href=href;
-    link.append(create('h3','smartstack-recommendations__product-name',item.title||'Product'));
-    detail.append(link);
-    const design=block.__ssDesign||{};
+    if(design.showTitle!==false){
+      link.append(create('h3','smartstack-recommendations__product-name',item.title||'Product'));
+      detail.append(link);
+    }
     if(design.showVendor&&item.vendor)detail.prepend(create('span','smartstack-recommendations__vendor',item.vendor));
     const price=design.showPrice!==false && item.priceFormatted
       ?create('p','smartstack-recommendations__price',item.priceFormatted):null;
@@ -545,6 +568,14 @@
       if (!data || !Array.isArray(data.items)) throw new Error('Unexpected recommendation response');
       const design=getDesign(block,data.design);
       applyDesign(block,design);
+      const existingCss=block.querySelector('style[data-smartstack-custom-css]');
+      if(existingCss)existingCss.remove();
+      if(typeof data.customCss==='string' && data.customCss.length<6000 && data.customCss){
+        const style=document.createElement('style');
+        style.dataset.smartstackCustomCss='1';
+        style.textContent=data.customCss;
+        block.append(style);
+      }
 
       const valid = data.items.filter(item => item.available && safePath(item.url));
       const body = block.querySelector('.smartstack-recommendations__body');
