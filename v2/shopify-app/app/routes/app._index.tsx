@@ -201,6 +201,20 @@ export default function SmartStackHome(){
           Review order evidence →
         </Link>
       </div>
+      <div style={{background:"linear-gradient(120deg,#f2efff,#ebf8f2)",
+        border:"1px solid #dfd9f3",borderRadius:14,padding:17,marginTop:13,
+        display:"flex",justifyContent:"space-between",alignItems:"center",gap:15,flexWrap:"wrap"}}>
+        <div><strong style={{color:"#332c65"}}>SmartStack Analytics</strong>
+          <p style={{fontSize:12,color:"#716d86",lineHeight:1.5,margin:"5px 0 0"}}>
+            View recommendation interactions and, when verified Shopify order access
+            is connected, directly attributed purchased products, revenue and commission estimates.
+          </p>
+        </div>
+        <Link to="/app/analytics" className="ssr-home-primary"
+          style={{background:"#7357d8",color:"white",whiteSpace:"nowrap"}}>
+          Open Analytics →
+        </Link>
+      </div>
       <div className="ssr-home-note">
         <span>✦</span> Automatic suggestions currently use catalogue attributes, not a connected AI model.
         Subscription billing, real bundle discounts and commission collection remain disabled in this development pilot.
