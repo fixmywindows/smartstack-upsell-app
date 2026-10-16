@@ -12,6 +12,7 @@
   --ss-button-bg: #24252a;
   --ss-button-fg: #fff;
   --ss-button-border: transparent;
+  --ss-button-outline: currentColor;
   --ss-button-radius: 8px;
   --ss-button-size: 14px;
   --ss-heading-font: var(--font-heading-family, inherit);
@@ -199,9 +200,9 @@
 .smartstack-recommendations__button:hover { filter: brightness(.93); }
 .smartstack-recommendations__button:disabled { opacity: .55; cursor: not-allowed; }
 .smartstack-recommendations[data-ss-button-style="outline"] .smartstack-recommendations__button {
-  color: var(--ss-button-bg);
+  color: var(--ss-button-outline);
   background: transparent;
-  border-color: var(--ss-button-bg);
+  border-color: var(--ss-button-outline);
 }
 .smartstack-recommendations[data-ss-button-style="text"] .smartstack-recommendations__button {
   color: inherit;
