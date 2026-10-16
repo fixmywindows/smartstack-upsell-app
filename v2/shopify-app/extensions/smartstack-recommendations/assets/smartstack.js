@@ -165,6 +165,20 @@
         block.style.setProperty('--ss-price-weight',computed.fontWeight);
       }
     }
+    if(design.preset==='theme' && block.dataset.styleSource!=='block'){
+      const nativeGrid=document.querySelector('.related-products .grid, .related-products .product-grid');
+      if(nativeGrid){
+        const gap=parseFloat(getComputedStyle(nativeGrid).columnGap);
+        if(Number.isFinite(gap) && gap>=8 && gap<=36){
+          block.style.setProperty('--ss-gap',gap+'px');
+        }
+      }
+      const nativeMedia=document.querySelector('.related-products .card__media');
+      if(nativeMedia){
+        const nativeStyle=getComputedStyle(nativeMedia);
+        block.style.setProperty('--ss-media-bg',nativeStyle.backgroundColor);
+      }
+    }
 
     let bg='#24252a',fg='#fff',radius=design.cardRadius+'px',size='14px',border='transparent';
     const buyButton=themeButtons();
