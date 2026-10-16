@@ -50,7 +50,7 @@ test('renderer source is valid JavaScript',()=>{
 });
 
 test('multi-item bundle is explicit about no checkout discount and sources current product',()=>{
-  assert.match(js,/No bundle discount is applied yet/);
+  assert.match(js,/No bundle discount is active/);
   assert.match(js,/data\.source/);
   assert.match(js,/Add selected set to basket/);
   assert.match(js,/addToCart\(items\)/);
