@@ -39,6 +39,8 @@ model MerchantShop {
   observedOrders  OrderPairObservation[]
   pairCounts      ObservedProductPair[]
   orderSync       OrderSyncState?
+  recommendationEvents RecommendationEvent[]
+  recommendationPurchases RecommendationPurchase[]
   blocks          RecommendationBlock[]
   ruleSets        RecommendationRuleSet[]
   designs          RecommendationDesign[]
@@ -189,4 +191,48 @@ model RecommendationDesign {
   shop        MerchantShop @relation(fields: [shopDomain], references: [domain], onDelete: Cascade)
   @@unique([shopDomain, kind])
   @@index([shopDomain])
+}
+
+
+model RecommendationEvent {
+  id String @id @default(cuid())
+  shopDomain String
+  eventId String
+  tokenHash String
+  kind String
+  type String
+  sourceProductId String
+  productId String
+  setId String
+  groupIndex Int?
+  occurredAt DateTime @default(now())
+  shop MerchantShop @relation(fields:[shopDomain],references:[domain],onDelete:Cascade)
+  @@unique([shopDomain,eventId])
+  @@index([shopDomain,occurredAt,type])
+  @@index([shopDomain,setId,occurredAt])
+  @@index([shopDomain,tokenHash,occurredAt])
+}
+
+model RecommendationPurchase {
+  id String @id @default(cuid())
+  shopDomain String
+  orderKey String
+  lineKey String
+  kind String
+  sourceProductId String
+  productId String
+  setId String
+  groupIndex Int?
+  currencyCode String
+  quantity Int
+  netRevenueMinor Int
+  commissionBasisPoints Int
+  estimatedCommissionMinor Int
+  purchasedAt DateTime
+  updatedAt DateTime @updatedAt
+  shop MerchantShop @relation(fields:[shopDomain],references:[domain],onDelete:Cascade)
+  @@unique([shopDomain,orderKey,lineKey])
+  @@index([shopDomain,purchasedAt,kind])
+  @@index([shopDomain,setId,purchasedAt])
+  @@index([shopDomain,productId,purchasedAt])
 }
