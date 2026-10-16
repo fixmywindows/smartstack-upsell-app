@@ -14,6 +14,14 @@
   data-proxy-path="{{ block.settings.proxy_path | escape }}"
   data-heading="{{ block.settings.heading | escape }}"
   data-layout="{{ block.settings.layout }}"
+  data-style-source="{{ block.settings.design_source }}"
+  data-quick-add-override="{{ block.settings.quick_add_override }}"
+  data-price-override="{{ block.settings.price_override }}"
+  data-show-price="{{ block.settings.show_price }}"
+  data-show-vendor="{{ block.settings.show_vendor }}"
+  data-image-ratio="{{ block.settings.image_ratio }}"
+  data-image-fit="{{ block.settings.image_fit }}"
+  data-button-style="{{ block.settings.button_style }}"
   data-show-quick-add="{{ block.settings.quick_add }}"
   style="--ss-accent: {{ block.settings.accent_colour }}; --ss-radius: {{ block.settings.card_radius }}px; --ss-gap: {{ block.settings.card_gap }}px; --ss-cols: {{ block.settings.desktop_columns }}; --ss-mobile-cols: {{ block.settings.mobile_columns }};"
   {{ block.shopify_attributes }}
@@ -46,12 +54,81 @@
       "id": "recommendation_type",
       "label": "Block type",
       "options": [
-        {"value": "similar", "label": "Similar products"},
-        {"value": "complement", "label": "Complementary products"},
-        {"value": "bought_together", "label": "Frequently bought together"},
-        {"value": "bundle", "label": "Complete the set"}
+        {
+          "value": "similar",
+          "label": "Similar products"
+        },
+        {
+          "value": "complement",
+          "label": "Complementary products"
+        },
+        {
+          "value": "bought_together",
+          "label": "Frequently bought together"
+        },
+        {
+          "value": "bundle",
+          "label": "Complete the set"
+        }
       ],
       "default": "complement"
+    },
+    {
+      "type": "select",
+      "id": "design_source",
+      "label": "Design settings",
+      "options": [
+        {
+          "value": "studio",
+          "label": "Use Design Studio defaults"
+        },
+        {
+          "value": "block",
+          "label": "Customise this block"
+        }
+      ],
+      "default": "studio",
+      "info": "Configure shared defaults in SmartStack > Design Studio. Choose Customise to use this block's settings."
+    },
+    {
+      "type": "select",
+      "id": "quick_add_override",
+      "label": "Add to Basket buttons",
+      "options": [
+        {
+          "value": "studio",
+          "label": "Follow design settings"
+        },
+        {
+          "value": "show",
+          "label": "Always display"
+        },
+        {
+          "value": "hide",
+          "label": "Hide buttons"
+        }
+      ],
+      "default": "studio"
+    },
+    {
+      "type": "select",
+      "id": "price_override",
+      "label": "Product prices",
+      "options": [
+        {
+          "value": "studio",
+          "label": "Follow design settings"
+        },
+        {
+          "value": "show",
+          "label": "Always display"
+        },
+        {
+          "value": "hide",
+          "label": "Hide prices"
+        }
+      ],
+      "default": "studio"
     },
     {
       "type": "text",
@@ -77,8 +154,18 @@
       "id": "layout",
       "label": "Layout",
       "options": [
-        {"value": "grid", "label": "Product grid"},
-        {"value": "carousel", "label": "Swipeable row"}
+        {
+          "value": "grid",
+          "label": "Product grid"
+        },
+        {
+          "value": "carousel",
+          "label": "Swipeable row"
+        },
+        {
+          "value": "compact",
+          "label": "Compact vertical list"
+        }
       ],
       "default": "grid"
     },
@@ -87,10 +174,80 @@
       "id": "card_style",
       "label": "Card appearance",
       "options": [
-        {"value": "bordered", "label": "Bordered cards"},
-        {"value": "minimal", "label": "Minimal cards"}
+        {
+          "value": "bordered",
+          "label": "Bordered cards"
+        },
+        {
+          "value": "minimal",
+          "label": "Minimal cards"
+        },
+        {
+          "value": "soft",
+          "label": "Soft background"
+        }
       ],
       "default": "bordered"
+    },
+    {
+      "type": "select",
+      "id": "image_ratio",
+      "label": "Image shape",
+      "options": [
+        {
+          "value": "square",
+          "label": "Square (1:1)"
+        },
+        {
+          "value": "portrait",
+          "label": "Portrait (4:5)"
+        },
+        {
+          "value": "landscape",
+          "label": "Landscape (4:3)"
+        }
+      ],
+      "default": "square"
+    },
+    {
+      "type": "select",
+      "id": "image_fit",
+      "label": "Image fit",
+      "options": [
+        {
+          "value": "contain",
+          "label": "Contain (no crop)"
+        },
+        {
+          "value": "cover",
+          "label": "Cover (crop to fit)"
+        }
+      ],
+      "default": "contain"
+    },
+    {
+      "type": "select",
+      "id": "button_style",
+      "label": "Button style",
+      "options": [
+        {
+          "value": "match",
+          "label": "Match store buttons"
+        },
+        {
+          "value": "solid",
+          "label": "Solid button"
+        },
+        {
+          "value": "outline",
+          "label": "Outline button"
+        },
+        {
+          "value": "text",
+          "label": "Text link"
+        }
+      ],
+      "default": "match"
     },
     {
       "type": "range",
@@ -106,8 +263,14 @@
       "id": "mobile_columns",
       "label": "Mobile columns",
       "options": [
-        {"value": "1", "label": "1 column"},
-        {"value": "2", "label": "2 columns"}
+        {
+          "value": "1",
+          "label": "1 column"
+        },
+        {
+          "value": "2",
+          "label": "2 columns"
+        }
       ],
       "default": "2"
     },
@@ -138,10 +301,23 @@
       "default": true
     },
     {
+      "type": "checkbox",
+      "id": "show_price",
+      "label": "Show product prices",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "show_vendor",
+      "label": "Show vendor",
+      "default": false
+    },
+    {
       "type": "color",
       "id": "accent_colour",
-      "label": "Button colour",
-      "default": "#5b4bc7"
+      "label": "Custom button colour",
+      "default": "#24252a",
+      "info": "Used when this block is customised and uses a solid button style."
     },
     {
       "type": "header",
