@@ -49,7 +49,7 @@ jobs:
         run: npx prisma validate
       - name: Test theme, rules and Design Studio
         working-directory: v2/shopify-app
-        run: node --test tests/widget.test.mjs tests/phase2-rules.test.mjs tests/design.test.mjs
+        run: node --test tests/widget.test.mjs tests/phase2-rules.test.mjs tests/design.test.mjs tests/inline-aggregation.test.mjs
       - name: Typecheck app
         working-directory: v2/shopify-app
         run: npm run typecheck
