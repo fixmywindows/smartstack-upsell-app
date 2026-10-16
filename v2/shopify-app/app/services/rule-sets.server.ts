@@ -144,7 +144,7 @@ export function parseRuleSet(form: FormData, plan: string): ValidatedRuleSet {
   const parsedPriority = Number(form.get("priority"));
   const priority = Number.isFinite(parsedPriority) ? Math.max(1,Math.min(100,Math.round(parsedPriority))) : 50;
   const parsedMax = Number(form.get("maxItems"));
-  const maxItems = Number.isFinite(parsedMax) ? Math.max(1,Math.min(kind==="bundle"?3:12,Math.round(parsedMax))) : 3;
+  const maxItems = Number.isFinite(parsedMax) ? Math.max(1,Math.min(kind==="bundle"?7:8,Math.round(parsedMax))) : 3;
 
   return {
     kind, name, heading, enabled, priority, sourceMatch,
