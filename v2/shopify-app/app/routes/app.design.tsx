@@ -174,9 +174,9 @@ export default function DesignStudio(){
               </label>
               {design.buttonColor&&<button type="button" onClick={()=>set("buttonColor","")} style={actionButton}>
                 Restore automatic theme colour
-              </button>
+              </button>}
               <AdvancedDesignControls design={design}
-                onChange={(key,value)=>set(key,value as never)}/>}
+                onChange={(key,value)=>set(key,value as never)}/>
             </div>}
           </div>
           <Form method="post" style={surface}>

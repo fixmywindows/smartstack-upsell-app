@@ -244,7 +244,7 @@ function RuleGroups({label,groups,onChange,outerLogic,setOuterLogic,keys,categor
             value={group.maxItems??1} onChange={e=>updateGroup(gi,{...group,maxItems:Number(e.target.value)})}>
             {Array.from({length:maxCapacity},(_,i)=>i+1).map(n=><option key={n} value={n}>{n} products</option>)}
           </select>
-        </label>
+        </label>}
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <span style={{...muted,fontSize:12}}>Within group</span>
           <select aria-label={"Group "+(gi+1)+" logic"} style={{...selectStyle,width:148}}
