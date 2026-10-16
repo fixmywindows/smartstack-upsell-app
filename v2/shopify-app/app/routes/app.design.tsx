@@ -198,18 +198,23 @@ export default function DesignStudio(){
                 fontWeight:650,textAlign:design.headingAlign}}>{types.find(t=>t.id===data.kind)?.title}</h3>}
               {shown.length===0?<p style={small}>Sync some published products to see examples here.</p>:
                 data.kind==="bundle" ? <div style={{border:"1px solid #e1e4e9",borderRadius:design.cardRadius,padding:14}}>
-                  <div style={{display:"grid",gap:9}}>
+                  <div style={{display:"grid",gap:9,gridTemplateColumns:design.bundleLayout==="cards"?
+                    "repeat("+Math.min(shown.length,device==="mobile"?2:4)+",minmax(0,1fr))":"1fr"}}>
                     {shown.map((p,index)=><div key={p.productId}
-                      style={{display:"grid",gridTemplateColumns:"18px 46px minmax(0,1fr) auto",
-                        alignItems:"center",gap:9,borderBottom:"1px solid #eef0f2",paddingBottom:8}}>
+                      style={{display:"grid",gridTemplateColumns:design.bundleLayout==="cards"?
+                        "18px minmax(0,1fr)":"18px 46px minmax(0,1fr) auto",
+                        alignItems:"center",gap:9,borderBottom:design.bundleLayout==="cards"?"none":"1px solid #eef0f2",
+                        borderRadius:8,paddingBottom:8,minWidth:0}}>
                       <input type="checkbox" defaultChecked disabled={index===0} aria-label={"Include "+p.title}/>
-                      {p.imageUrl?<img src={p.imageUrl} alt="" style={{height:46,width:46,objectFit:design.imageFit}}/>:
+                      {p.imageUrl?<img src={p.imageUrl} alt="" style={{height:design.bundleLayout==="cards"?100:46,
+                        width:design.bundleLayout==="cards"?"100%":46,objectFit:design.imageFit,
+                        gridColumn:design.bundleLayout==="cards"?"1 / -1":undefined}}/>:
                         <div style={{height:46,width:46,background:"#f3f3f5"}}/>}
-                      <div style={{minWidth:0,fontSize:11}}>
+                      <div style={{minWidth:0,fontSize:11,gridColumn:design.bundleLayout==="cards"?"1 / -1":undefined}}>
                         <div style={{fontWeight:650,overflowWrap:"anywhere"}}>{p.title}</div>
                         {index===0&&<span style={{...small,fontSize:10}}>Current product</span>}
                       </div>
-                      <strong style={{fontSize:11}}>{new Intl.NumberFormat("en-GB",
+                      <strong style={{fontSize:11,gridColumn:design.bundleLayout==="cards"?"1 / -1":undefined}}>{new Intl.NumberFormat("en-GB",
                         {style:"currency",currency:p.currencyCode}).format(p.priceMinor/100)}</strong>
                     </div>)}
                   </div>
