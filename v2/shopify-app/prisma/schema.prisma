@@ -37,6 +37,7 @@ model MerchantShop {
   products        ProductSnapshot[]
   blocks          RecommendationBlock[]
   ruleSets        RecommendationRuleSet[]
+  designs          RecommendationDesign[]
   plan            String   @default("free")
 }
 
@@ -117,4 +118,16 @@ model RecommendationRuleSet {
 
   @@index([shopDomain, kind, enabled, priority])
   @@index([shopDomain, kind, priority])
+}
+
+model RecommendationDesign {
+  id          String   @id @default(cuid())
+  shopDomain  String
+  kind        String
+  settings    Json     @default("{}")
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  shop        MerchantShop @relation(fields: [shopDomain], references: [domain], onDelete: Cascade)
+  @@unique([shopDomain, kind])
+  @@index([shopDomain])
 }
