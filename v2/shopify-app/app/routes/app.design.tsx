@@ -207,9 +207,8 @@ export default function DesignStudio(){
           <div style={{marginTop:16,padding:15,borderRadius:11,background:"#f0f1f4",overflowX:"auto"}}>
             <div style={{maxWidth:width,width:"100%",padding:device==="mobile"?12:22,
               background:"#fff",borderRadius:8,margin:"0 auto",boxSizing:"border-box"}}>
-              {design.showHeading&&<h3 style={{margin:"0 0 17px",fontSize:device==="mobile"?18:22,
-                fontWeight:650,textAlign:design.headingAlign,fontSize:design.headingFontSize||undefined,
-                fontWeight:design.headingFontWeight||650,fontStyle:design.headingItalic?"italic":"normal",
+              {design.showHeading&&<h3 style={{margin:"0 0 17px",fontSize:design.headingFontSize||(device==="mobile"?18:22),
+                textAlign:design.headingAlign,fontWeight:design.headingFontWeight||650,fontStyle:design.headingItalic?"italic":"normal",
                 color:design.headingColor||"inherit"}}>{types.find(t=>t.id===data.kind)?.title}</h3>}
               {shown.length===0?<p style={small}>Sync some published products to see examples here.</p>:
                 data.kind==="bundle" ? <div style={{border:"1px solid #e1e4e9",borderRadius:design.cardRadius,padding:14}}>
