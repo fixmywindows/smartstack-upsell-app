@@ -14,7 +14,11 @@ export async function analyticsReport(shopDomain:string,scope:string|null|undefi
   const shop=await db.merchantShop.findUniqueOrThrow({
     where:{domain:shopDomain},select:{plan:true}
   });
-  const plan=validPlan(shop.plan),paid=plan!=="free",orderConnected=hasOrderScope(scope);
+  const plan=validPlan(shop.plan),paid=plan!=="free";
+  const syncState=await db.orderSyncState.findUnique({
+    where:{shopDomain},select:{scanned:true,finished:true,updatedAt:true}
+  });
+  const orderConnected=hasOrderScope(scope) && syncState!==null;
   const kindValue=url.searchParams.get("kind")||"all";
   const selectedKind=["similar","complement","bought_together","bundle"].includes(kindValue)?
     kindValue:"all";

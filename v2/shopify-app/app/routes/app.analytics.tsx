@@ -65,7 +65,7 @@ export default function SmartStackAnalytics(){
         <div>
           <span className="ssr-hero-kicker">SMARTSTACK · PERFORMANCE INTELLIGENCE</span>
           <h2>Know what your recommendations deliver.</h2>
-          <p>From product views to verified basket additions and purchased products.
+          <p>From consented recommendation views and basket actions to Shopify-verified purchases.
             No guessed revenue. No hidden commission calculations.</p>
         </div>
         <div className="ssr-analytics-plan">
@@ -86,16 +86,16 @@ export default function SmartStackAnalytics(){
       </div>
       <div className="ssr-analytics-kpis">
         {[
-          {title:"Recommended products purchased",value:emptyOrder?"—":String(summary.units),
+          {title:"Directly attributed products purchased",value:emptyOrder?"—":String(summary.units),
             unit:emptyOrder?"Order connection required":"Net units in verified orders",icon:"▣"},
           {title:"Attributed sales",value:emptyOrder?"—":
             moneyRows.length===1?formatMoney(moneyRows[0].revenueMinor,moneyRows[0].currencyCode):
             moneyRows.length===0?formatMoney(0,"GBP"):"Multiple currencies",
-            unit:emptyOrder?"Not connected":"Product revenue after discounts and returns",icon:"↗"},
+            unit:emptyOrder?"Not connected":"Net value from directly attributed Shopify order lines",icon:"↗"},
           {title:"Estimated commission",value:emptyOrder?"—":
             moneyRows.length===1?formatMoney(moneyRows[0].estimatedCommissionMinor,moneyRows[0].currencyCode):
             moneyRows.length===0?formatMoney(0,"GBP"):"Multiple currencies",
-            unit:rate+"% proposed rate · £0 billed by this pilot",icon:"✧"}
+            unit:rate+"% proposed rate · no usage charges created",icon:"✧"}
         ].map((item,index)=><article style={card} key={item.title} className="ssr-analytics-kpi">
           <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"center"}}>
             <span style={{...text,fontWeight:650}}>{item.title}</span>
@@ -190,6 +190,13 @@ export default function SmartStackAnalytics(){
         <div className="ssr-analytics-pair-charts">
           <section style={card}><RowChart daily={advanced?.daily||[]} field="views" label="Recommendation card views" tone="#7959d8"/></section>
           <section style={card}><RowChart daily={advanced?.daily||[]} field="clicks" label="Recommendation clicks" tone="#1aa489"/></section>
+        </div>
+        <div className="ssr-analytics-pair-charts">
+          <section style={card}><RowChart daily={advanced?.daily||[]}
+            field="adds" label="SmartStack Add to Basket actions" tone="#f1a25c"/></section>
+          <section style={card}><RowChart daily={advanced?.daily||[]}
+            field="revenueMinor" label={"Verified attributed product revenue ("+currency+")"}
+            tone="#836add"/></section>
         </div>
         <section style={{...card,marginTop:14}}>
           <div className="ssr-analytics-section-header">
