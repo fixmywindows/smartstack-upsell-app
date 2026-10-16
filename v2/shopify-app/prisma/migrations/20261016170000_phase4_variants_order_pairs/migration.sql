@@ -1,3 +1,5 @@
+ALTER TABLE "ProductSnapshot" ADD COLUMN "variantsComplete" BOOLEAN NOT NULL DEFAULT TRUE;
+
 -- Phase 4 additive. No customer PII, carts, payments, sessions or legacy rules touched.
 CREATE TABLE "ProductVariantSnapshot" (
   "shopDomain" TEXT NOT NULL, "productId" TEXT NOT NULL, "variantId" TEXT NOT NULL,
