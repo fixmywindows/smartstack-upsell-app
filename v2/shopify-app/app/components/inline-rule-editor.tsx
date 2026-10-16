@@ -11,7 +11,7 @@ export type RowSet={
 };
 const OPTIONS=[
   ["title","Product title"],["tags","Product tag"],["category","Category"],
-  ["product_type","Product type"],["vendor","Vendor"],["collections","Collection"],["price","Price"]
+  ["product_type","Product type"],["vendor","Vendor"],["collections","Collection"],["price","Price"],["available","Availability"]
 ] as const;
 const OPS=[
   ["equals","Equals"],["not_equals","Does not equal"],
@@ -84,6 +84,13 @@ function ConditionGroups({groups,onChange,outer,setOuter,metafields,categories,r
         </select>
         {["exists","not_exists"].includes(r.op)?
           <span className="ssr-caption">No value needed</span>:
+        r.field==="available"?
+          <select aria-label={"Availability "+(ri+1)} className="ssr-select"
+            value={String(r.value)} onChange={e=>updateRule(gi,ri,{value:e.target.value})}>
+            <option value="">Choose availability</option>
+            <option value="true">In stock</option>
+            <option value="false">Out of stock</option>
+          </select>:
         r.field==="category"?
           <select aria-label={"Category "+(ri+1)} className="ssr-select" value={String(r.value)}
             onChange={e=>updateRule(gi,ri,{value:e.target.value})}>
