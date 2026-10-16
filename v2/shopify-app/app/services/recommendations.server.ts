@@ -112,7 +112,7 @@ export async function getRecommendations(
   }
 
   const mapProduct = (p:Product) => ({
-    id:p.id,title:p.title,
+    id:p.id,title:p.title,vendor:p.vendor,
     url:"/products/"+encodeURIComponent(p.handle),
     imageUrl:p.imageUrl,available:p.available,
     variantId:p.variantId?.split("/").pop()||"",
