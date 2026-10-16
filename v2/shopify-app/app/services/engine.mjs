@@ -161,6 +161,13 @@ export function recommend({sourceId,products,config,pairs={},semanticScores={}})
   let basis = 'attributes';
   let warning = null;
 
+  // Explicit THEN-conditions are merchant targeting rules: they must be able
+  // to produce matching products even when no hard-coded category pairing exists.
+  // Hard availability, exclusions and compatibility were already checked in pool.
+  const hasTargetRules = (config.ruleGroups ?? []).some(g=>Array.isArray(g.rules) && g.rules.length>0);
+  const ruleRank = candidate => 80
+    + (source.category === candidate.category ? 15 : 0)
+    + overlap(source,candidate)*12;
   if (mode !== MODES.MANUAL) {
     for(const candidate of pool) {
       if (used.has(candidate.id)) continue;
@@ -171,6 +178,7 @@ export function recommend({sourceId,products,config,pairs={},semanticScores={}})
         const pair=coPurchased(source,candidate,pairs);
         if(pair) ({score,evidence,count}=pair);
       }
+      if (!Number.isFinite(score) && hasTargetRules) score=ruleRank(candidate);
       // Semantic scoring is additive AFTER hard eligibility/compatibility checks.
       // It must come from an approved, cached model and cannot bypass merchant rules.
       if(Number.isFinite(score)) {
@@ -179,18 +187,26 @@ export function recommend({sourceId,products,config,pairs={},semanticScores={}})
       }
     }
     auto.sort((a,b)=>b.score-a.score || a.product.id.localeCompare(b.product.id));
-    if (kind === BLOCK_TYPES.BOUGHT_TOGETHER && !auto.length) {
-      // Never claim order-history evidence that does not exist.
-      heading = 'Pairs well with';
-      basis = 'cold_start';
-      warning = 'Insufficient order history: showing inferred complementary products instead.';
-      for(const p of pool){const score=complementary(source,p);if(Number.isFinite(score))auto.push({product:p,score,evidence:'inferred',count:null});}
-      auto.sort((a,b)=>b.score-a.score || a.product.id.localeCompare(b.product.id));
-    } else if(kind===BLOCK_TYPES.BOUGHT_TOGETHER) basis='order_history';
+    if (kind === BLOCK_TYPES.BOUGHT_TOGETHER) {
+      // Distinguish evidence-backed co-purchases from catalogue guesses.
+      const hasObserved = auto.some(item=>item.evidence==='observed');
+      if (!hasObserved) {
+        heading = 'Pairs well with';
+        basis = 'cold_start';
+        warning = 'No verified order pairs yet: showing eligible catalogue matches.';
+        if (!auto.length) {
+          for(const p of pool){
+            const score=complementary(source,p);
+            if(Number.isFinite(score))auto.push({product:p,score,evidence:'inferred',count:null});
+          }
+          auto.sort((a,b)=>b.score-a.score || a.product.id.localeCompare(b.product.id));
+        }
+      } else basis='order_history';
+    }
   }
   let items=[...pinned,...auto].slice(0,max);
   if(kind===BLOCK_TYPES.BOUGHT_TOGETHER && mode===MODES.HYBRID && pinned.length && auto.length){
-    heading='Frequently bought together and hand-picked';
+    heading=basis==='order_history'?'Frequently bought together and hand-picked':'Pairs well with';
   }
   if(kind===BLOCK_TYPES.BOUGHT_TOGETHER && mode===MODES.MANUAL){
     heading='Recommended together'; basis='merchant';
