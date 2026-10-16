@@ -431,3 +431,63 @@
   max-width:300px;
   margin:5px 0 0;
 }
+
+
+/* SmartStack advanced design variables. Font family stays inherited from Shopify. */
+.smartstack-recommendations__title{
+  font-style:var(--ss-heading-italic,normal);
+}
+.smartstack-recommendations__product-name{
+  font-style:var(--ss-title-italic,normal);
+  color:var(--ss-title-color,inherit);
+}
+.smartstack-recommendations__price{
+  font-style:var(--ss-price-italic,normal);
+  color:var(--ss-price-color,inherit);
+}
+.smartstack-recommendations__item{
+  background:var(--ss-card-background,transparent);
+  padding:var(--ss-card-padding,0px);
+}
+.smartstack-recommendations[data-ss-card-style="bordered"] .smartstack-recommendations__item,
+.smartstack-recommendations[data-ss-card-style="soft"] .smartstack-recommendations__item{
+  border-width:var(--ss-border-width,1px);
+  border-color:var(--ss-border-color,rgba(110,116,129,.22));
+}
+.smartstack-recommendations__photo{
+  max-height:var(--ss-image-max,440px);
+}
+.smartstack-recommendations__button{
+  width:var(--ss-button-width,100%);
+}
+.smartstack-recommendations[data-ss-text-align="center"] .smartstack-recommendations__detail{
+  text-align:center;
+  align-items:center;
+}
+.smartstack-recommendations[data-ss-text-align="center"] .smartstack-recommendations__button{
+  justify-content:center;
+}
+.smartstack-recommendations[data-ss-shadow="subtle"] .smartstack-recommendations__item{
+  box-shadow:0 3px 10px rgba(28,23,54,.08);
+}
+.smartstack-recommendations[data-ss-shadow="raised"] .smartstack-recommendations__item{
+  box-shadow:0 8px 24px rgba(28,23,54,.14);
+}
+.smartstack-recommendations[data-ss-hover="lift"] .smartstack-recommendations__item{
+  transition:transform .18s ease,box-shadow .18s ease;
+}
+.smartstack-recommendations[data-ss-hover="lift"] .smartstack-recommendations__item:hover{
+  transform:translateY(-3px);
+}
+.smartstack-recommendations[data-ss-hover="zoom"] .smartstack-recommendations__item:hover
+.smartstack-recommendations__photo{
+  transform:scale(1.045);
+}
+@media(prefers-reduced-motion:reduce){
+  .smartstack-recommendations[data-ss-hover] .smartstack-recommendations__item{
+    transition:none!important;
+  }
+  .smartstack-recommendations[data-ss-hover] .smartstack-recommendations__item:hover{
+    transform:none!important;
+  }
+}
