@@ -35,6 +35,10 @@ model MerchantShop {
   updatedAt       DateTime @updatedAt
   createdAt       DateTime @default(now())
   products        ProductSnapshot[]
+  variants        ProductVariantSnapshot[]
+  observedOrders  OrderPairObservation[]
+  pairCounts      ObservedProductPair[]
+  orderSync       OrderSyncState?
   blocks          RecommendationBlock[]
   ruleSets        RecommendationRuleSet[]
   designs          RecommendationDesign[]
@@ -63,6 +67,58 @@ model ProductSnapshot {
   @@id([shopDomain, productId])
   @@index([shopDomain, category])
 }
+
+
+model ProductVariantSnapshot {
+  shopDomain     String
+  productId      String
+  variantId      String
+  title          String
+  sku            String?
+  priceMinor     Int
+  compareAtMinor Int?
+  available      Boolean @default(false)
+  inventoryQty   Int?
+  options        Json @default("[]")
+  imageUrl       String?
+  updatedAt      DateTime @updatedAt
+  shop           MerchantShop @relation(fields: [shopDomain], references: [domain], onDelete: Cascade)
+  @@id([shopDomain, variantId])
+  @@index([shopDomain, productId])
+}
+
+model OrderPairObservation {
+  shopDomain String
+  orderKey   String
+  productIds Json @default("[]")
+  placedAt   DateTime
+  updatedAt  DateTime @updatedAt
+  shop       MerchantShop @relation(fields: [shopDomain], references: [domain], onDelete: Cascade)
+  @@id([shopDomain, orderKey])
+  @@index([shopDomain, placedAt])
+}
+
+model ObservedProductPair {
+  shopDomain String
+  productA   String
+  productB   String
+  orderCount Int @default(0)
+  updatedAt  DateTime @updatedAt
+  shop       MerchantShop @relation(fields: [shopDomain], references: [domain], onDelete: Cascade)
+  @@id([shopDomain, productA, productB])
+  @@index([shopDomain, productB])
+}
+
+model OrderSyncState {
+  shopDomain String @id
+  cursor     String?
+  finished   Boolean @default(false)
+  scanned    Int @default(0)
+  observed   Int @default(0)
+  updatedAt  DateTime @updatedAt
+  shop       MerchantShop @relation(fields: [shopDomain], references: [domain], onDelete: Cascade)
+}
+
 
 model RecommendationBlock {
   id              String @id @default(cuid())
