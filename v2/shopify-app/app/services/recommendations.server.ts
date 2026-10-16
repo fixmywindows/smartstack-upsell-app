@@ -1,5 +1,6 @@
 import db from "../db.server";
 import { normaliseRuleGroups } from "../utils/rule-groups";
+import { getObservedPairs } from "./order-signals.server";
 // @ts-ignore — pure JS engine, tested with Node.
 import { recommend, evaluateGroups } from "./engine.mjs";
 // @ts-ignore — independent, deterministic aggregator, tested with Node.
@@ -33,7 +34,8 @@ export async function getRecommendations(
     available:p.available,published:p.published,
     tags:array(p.tags),collections:array(p.collections),
     metafields:p.metafields as Record<string,unknown>,
-    imageUrl:p.imageUrl,variantId:p.variantId,currencyCode:p.currencyCode
+    imageUrl:p.imageUrl,variantId:p.variantId,
+    variantsComplete:p.variantsComplete,currencyCode:p.currencyCode
   }));
   type Product=typeof products[number];
   const source=products.find(p=>p.id===sourceId);
@@ -42,6 +44,7 @@ export async function getRecommendations(
   // current source product and up to seven for add-ons.
   const blockLimit=clamp(max,1,8);
   const addonLimit=kind==="bundle"?Math.max(0,blockLimit-1):blockLimit;
+  const pairs=kind==="bought_together"?await getObservedPairs(shopDomain,sourceId):{};
   const configFor=(set:typeof sets[number],desired:number,used:Set<string>)=>({
     kind,mode:set.selectionMode,heading:set.heading,
     maxItems:Math.max(1,Math.min(8,desired)),
@@ -68,13 +71,13 @@ export async function getRecommendations(
       sets,source,sourceId,evaluateGroups,normaliseGroups:normaliseRuleGroups,
       max:addonLimit,previewSetId:options.previewSetId||null,
       recommendForSet:(set:typeof sets[number],requested:number,used:Set<string>)=>
-        recommend({sourceId,products,pairs:{},config:configFor(set,requested,used)})
+        recommend({sourceId,products,pairs,config:configFor(set,requested,used)})
     });
     contributions=result.contributors as Contributor[];
     trace=result.trace as typeof trace;
   }else if(legacy?.enabled&&!options.previewSetId&&addonLimit>0){
     // Compatibility fallback for shops which have not migrated from Phase 1.
-    legacyOutput=recommend({sourceId,products,pairs:{},config:{
+    legacyOutput=recommend({sourceId,products,pairs,config:{
       kind,mode:legacy.mode,heading:legacy.heading,maxItems:Math.min(addonLimit,legacy.maxItems),
       pinnedIds:array(legacy.pinnedIds),excludeTags:array(legacy.excludedTags),
       ruleGroups:Array.isArray(legacy.ruleGroups)?legacy.ruleGroups:[]
@@ -90,15 +93,48 @@ export async function getRecommendations(
   const hasObserved=selected.some(item=>item.evidence==="observed");
   // One storefront heading covers products from every IF→THEN row.
   const heading=kind==="bought_together"&&!hasObserved?"Pairs well with":BLOCK_TITLES[kind];
-  const makeProduct=(p:Product)=>({
-    id:p.id,title:p.title,vendor:p.vendor,
-    url:"/products/"+encodeURIComponent(p.handle),imageUrl:p.imageUrl,
-    available:p.available,variantId:p.variantId?.split("/").pop()||"",
-    priceMinor:p.priceCents,currencyCode:p.currencyCode||"GBP",
-    priceFormatted:new Intl.NumberFormat("en-GB",{
-      style:"currency",currency:p.currencyCode||"GBP"
-    }).format(p.priceCents/100)
+  // Fetch only variants shown to this shopper, never the whole catalogue's
+  // variants or merchant-private variant inventory metadata.
+  const displayedIds=[sourceId,...selected.map(item=>item.product.id)];
+  const variantRecords=await db.productVariantSnapshot.findMany({
+    where:{shopDomain,productId:{in:[...new Set(displayedIds)]},available:true},
+    orderBy:{variantId:"asc"},
+    select:{productId:true,variantId:true,title:true,priceMinor:true,
+      compareAtMinor:true,options:true,imageUrl:true}
   });
+  const byProduct=new Map<string,typeof variantRecords>();
+  for(const variant of variantRecords){
+    const list=byProduct.get(variant.productId)||[];
+    list.push(variant);
+    byProduct.set(variant.productId,list);
+  }
+  const makeProduct=(p:Product)=>{
+    const saved=byProduct.get(p.id)||[];
+    const variants=saved.map(v=>({
+      id:v.variantId.split("/").pop()||"",
+      title:v.title,priceMinor:v.priceMinor,
+      compareAtMinor:v.compareAtMinor,
+      options:Array.isArray(v.options)?v.options:[],
+      imageUrl:v.imageUrl||p.imageUrl
+    }));
+    // A partially synced product can have more variants than are known.
+    // Never add its first variant without customer confirmation.
+    const complete=p.variantsComplete!==false;
+    const selectedId=complete && variants.length===1?variants[0].id:
+      complete && variants.length===0?p.variantId?.split("/").pop()||"":"";
+    return {
+      id:p.id,title:p.title,vendor:p.vendor,
+      url:"/products/"+encodeURIComponent(p.handle),imageUrl:p.imageUrl,
+      available:p.available,variantId:selectedId,
+      requiresVariantChoice:!complete||variants.length>1,
+      variantsComplete:complete,variants,currencyCode:p.currencyCode||"GBP",
+      priceMinor:p.priceCents,
+      priceFormatted:new Intl.NumberFormat("en-GB",{
+        style:"currency",currency:p.currencyCode||"GBP"
+      }).format(p.priceCents/100)
+    };
+  };
+
   const matchedSets=contributions.map(c=>({
     id:c.set.id,name:c.set.name,priority:c.set.priority,
     productCount:c.items.length,requested:Math.min(c.set.maxItems,addonLimit)
