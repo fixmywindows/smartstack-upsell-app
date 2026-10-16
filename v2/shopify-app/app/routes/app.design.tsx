@@ -197,6 +197,30 @@ export default function DesignStudio(){
               {design.showHeading&&<h3 style={{margin:"0 0 17px",fontSize:device==="mobile"?18:22,
                 fontWeight:650,textAlign:design.headingAlign}}>{types.find(t=>t.id===data.kind)?.title}</h3>}
               {shown.length===0?<p style={small}>Sync some published products to see examples here.</p>:
+                data.kind==="bundle" ? <div style={{border:"1px solid #e1e4e9",borderRadius:design.cardRadius,padding:14}}>
+                  <div style={{display:"grid",gap:9}}>
+                    {shown.map((p,index)=><div key={p.productId}
+                      style={{display:"grid",gridTemplateColumns:"18px 46px minmax(0,1fr) auto",
+                        alignItems:"center",gap:9,borderBottom:"1px solid #eef0f2",paddingBottom:8}}>
+                      <input type="checkbox" defaultChecked disabled={index===0} aria-label={"Include "+p.title}/>
+                      {p.imageUrl?<img src={p.imageUrl} alt="" style={{height:46,width:46,objectFit:design.imageFit}}/>:
+                        <div style={{height:46,width:46,background:"#f3f3f5"}}/>}
+                      <div style={{minWidth:0,fontSize:11}}>
+                        <div style={{fontWeight:650,overflowWrap:"anywhere"}}>{p.title}</div>
+                        {index===0&&<span style={{...small,fontSize:10}}>Current product</span>}
+                      </div>
+                      <strong style={{fontSize:11}}>{new Intl.NumberFormat("en-GB",
+                        {style:"currency",currency:p.currencyCode}).format(p.priceMinor/100)}</strong>
+                    </div>)}
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between",marginTop:14,fontSize:13}}>
+                    <span>Set total</span>
+                    <strong>{new Intl.NumberFormat("en-GB",{style:"currency",currency:shown[0].currencyCode})
+                      .format(shown.reduce((sum,p)=>sum+p.priceMinor,0)/100)}</strong>
+                  </div>
+                  <div style={{marginTop:12,background:"#24252a",color:"#fff",fontSize:12,textAlign:"center",
+                    padding:"10px 14px",borderRadius:Math.min(design.cardRadius,9)}}>Add selected set to basket</div>
+                </div> :
                 <div style={{display:"grid",gridTemplateColumns:compact?"1fr":
                   "repeat("+Math.min(columns,shown.length)+", minmax(0,1fr))",gap:design.cardGap}}>
                   {shown.slice(0,compact?3:4).map(p=><div key={p.productId} style={cardStyle}>
