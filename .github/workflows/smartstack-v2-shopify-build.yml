@@ -49,7 +49,7 @@ jobs:
         run: npx prisma validate
       - name: Test theme, rules and Design Studio
         working-directory: v2/shopify-app
-        run: node --test tests/widget.test.mjs tests/phase2-rules.test.mjs tests/design.test.mjs tests/inline-aggregation.test.mjs tests/inline-admin.test.mjs tests/attribute-pickers.test.mjs tests/phase4.test.mjs
+        run: node --test tests/widget.test.mjs tests/phase2-rules.test.mjs tests/design.test.mjs tests/inline-aggregation.test.mjs tests/inline-admin.test.mjs tests/attribute-pickers.test.mjs tests/phase4.test.mjs tests/group-quotas.test.mjs tests/product-analytics.test.mjs
       - name: Typecheck app
         working-directory: v2/shopify-app
         run: npm run typecheck
@@ -282,4 +282,30 @@ jobs:
             'gid://shopify/Product/111','gid://shopify/Product/112',2,CURRENT_TIMESTAMP);
           SELECT "variantId","title" FROM "ProductVariantSnapshot"
             WHERE "shopDomain"='test-shop.myshopify.com';
+          SQL
+
+      - name: Verify Phase 5 analytic attribution and group-allocation migration
+        working-directory: v2/shopify-app
+        env:
+          PGPASSWORD: test
+        run: |
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U test -d smartstack_test <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM information_schema.tables
+                WHERE table_name='RecommendationEvent') THEN
+              RAISE EXCEPTION 'Consent-based event table is missing';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.tables
+                WHERE table_name='RecommendationPurchase') THEN
+              RAISE EXCEPTION 'Verified purchase ledger table is missing';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                WHERE table_name='RecommendationRuleSet' AND column_name='targetMode') THEN
+              RAISE EXCEPTION 'Legacy-safe allocation mode missing';
+            END IF;
+            IF (SELECT "targetMode" FROM "RecommendationRuleSet" WHERE "legacyBlockId"='legacy-test') <> 'filter' THEN
+              RAISE EXCEPTION 'Imported matching semantics changed';
+            END IF;
+          END $$;
           SQL
