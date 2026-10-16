@@ -109,7 +109,7 @@ export default function DesignStudio(){
       </nav>
     </s-section>
     <s-section heading="Design editor">
-      <div style={{display:"grid",gridTemplateColumns:"minmax(265px,355px) minmax(0,1fr)",gap:18,alignItems:"start"}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,355px),1fr))",gap:18,alignItems:"start"}}>
         <div style={{display:"grid",gap:14}}>
           <div style={surface}>
             <strong>1. Choose a preset</strong>
