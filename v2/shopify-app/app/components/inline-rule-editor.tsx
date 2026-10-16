@@ -6,7 +6,7 @@ type Item={productId:string;title:string;imageUrl:string|null;category:string;pr
 export type RowSet={
   id:string;kind:string;name:string;heading:string;enabled:boolean;priority:number;
   maxItems:number;sourceMatch:string;sourceProductIds:unknown;sourceRules:unknown;sourceLogic:string;
-  selectionMode:string;pinnedIds:unknown;targetRules:unknown;targetLogic:string;
+  selectionMode:string;pinnedIds:unknown;targetRules:unknown;targetLogic:string;targetMode?:string;
   excludeRules:unknown;fallbackMode:string;
 };
 const OPTIONS=[
@@ -84,10 +84,10 @@ export function CatalogueChoice({kind,value,onChange,label,metafieldKey="",fallb
   </div>;
 }
 
-function ConditionGroups({groups,onChange,outer,setOuter,metafields,categories,remaining,side}:{
+function ConditionGroups({groups,onChange,outer,setOuter,metafields,categories,remaining,side,allocate=false,maxCapacity=8}:{
   groups:MatchGroup[];onChange:(next:MatchGroup[])=>void;
   outer:string;setOuter:(value:string)=>void;metafields:string[];categories:string[];
-  remaining:number|null;side:"if"|"then"
+  remaining:number|null;side:"if"|"then";allocate?:boolean;maxCapacity?:number
 }) {
   const attributeOptions=[...OPTIONS,["metafield","Metafield"] as const];
   const updateGroup=(gi:number,patch:MatchGroup)=>onChange(groups.map((g,i)=>i===gi?patch:g));
@@ -102,7 +102,7 @@ function ConditionGroups({groups,onChange,outer,setOuter,metafields,categories,r
   };
   const canAdd=remaining===null||remaining>0;
   return <div className="ssr-logic-groups">
-    {groups.length>1&&<label className="ssr-field">
+    {groups.length>1&&!allocate&&<label className="ssr-field">
       Join groups
       <select className="ssr-select" value={outer} onChange={e=>setOuter(e.target.value)}>
         <option value="AND">ALL groups match</option><option value="OR">ANY group matches</option>
@@ -112,6 +112,15 @@ function ConditionGroups({groups,onChange,outer,setOuter,metafields,categories,r
       <div className="ssr-group-head">
         <strong>Group {gi+1}</strong>
         <div className="ssr-actions">
+          {allocate&&<label className="ssr-group-limit">
+            <span>Show up to</span>
+            <select className="ssr-select" aria-label={"Group "+(gi+1)+" product allocation"}
+              value={group.maxItems??1}
+              onChange={e=>updateGroup(gi,{...group,maxItems:Number(e.target.value)})}>
+              {Array.from({length:maxCapacity},(_,i)=>i+1).map(n=>
+                <option key={n} value={n}>{n} {n===1?"product":"products"}</option>)}
+            </select>
+          </label>}
           <select className="ssr-select" style={{width:148,minHeight:31,padding:"5px 8px"}}
             aria-label={"Group "+(gi+1)+" logic"} value={group.logic}
             onChange={e=>updateGroup(gi,{...group,logic:joinLogic(e.target.value)})}>
@@ -175,9 +184,15 @@ function ConditionGroups({groups,onChange,outer,setOuter,metafields,categories,r
     </div>)}
     <button type="button" className="ssr-btn ssr-btn-minimal" style={{justifySelf:"start"}}
       disabled={!canAdd}
-      onClick={()=>onChange([...groups,{logic:"AND",rules:[{field:"tags",op:"contains",value:""}]}])}>
+      onClick={()=>onChange([...groups,{logic:"AND",rules:[{field:"tags",op:"contains",value:""}],
+        ...(allocate?{maxItems:1}:{})}])}>
       + Add {side==="if"?"IF":"THEN"} condition group
     </button>
+    {allocate&&<div className="ssr-allocated-summary" role="status">
+      <strong>{groups.reduce((n,g)=>n+(g.maxItems??1),0)} / {maxCapacity}</strong>
+      {" "}product slots requested by THEN groups.
+      <span> Groups are filled in order; duplicates are removed.</span>
+    </div>}
     {remaining!==null&&<span className="ssr-caption">
       {remaining} of your plan's additional condition slots available
     </span>}
@@ -235,10 +250,16 @@ export function InlineRuleEditor({set,products,metafields,categories,ruleCap,onC
   const [pinnedIds,setPinnedIds]=useState(strings(set.pinnedIds));
   const [targetRules,setTargetRules]=useState<MatchGroup[]>(groupsForEditor(set.targetRules,set.targetLogic));
   const [targetLogic,setTargetLogic]=useState(joinLogic(set.targetLogic));
+  const [targetMode,setTargetMode]=useState(set.targetMode==="allocate"?"allocate":"filter");
   const [priority,setPriority]=useState(set.priority);
   const [maxItems,setMaxItems]=useState(Math.min(set.kind==="bundle"?7:8,Math.max(1,set.maxItems)));
   const [fallback,setFallback]=useState(set.fallbackMode==="stop"?"stop":"next");
   const [enabled,setEnabled]=useState(set.enabled);
+  const groupCapacity=set.kind==="bundle"?7:8;
+  const allocated=targetRules.reduce((total,g)=>total+(g.maxItems??1),0);
+  const effectiveMax=targetMode==="allocate"?Math.min(groupCapacity,Math.max(1,allocated)):maxItems;
+  const overAllocated=targetMode==="allocate"&&allocated>groupCapacity;
+  const missingAllocation=targetMode==="allocate"&&(!targetRules.length||selectionMode==="manual");
   const otherCount=countRuleConditions(groupsForEditor(set.excludeRules));
   const used=(sourceMatch==="rules"?countRuleConditions(sourceRules):0)+
     countRuleConditions(targetRules)+otherCount;
@@ -263,6 +284,8 @@ export function InlineRuleEditor({set,products,metafields,categories,ruleCap,onC
     <input type="hidden" name="pinnedIds" value={JSON.stringify(pinnedIds)}/>
     <input type="hidden" name="targetRules" value={JSON.stringify(targetRules)}/>
     <input type="hidden" name="targetLogic" value={targetLogic}/>
+    <input type="hidden" name="targetMode" value={targetMode}/>
+    <input type="hidden" name="maxItems" value={effectiveMax}/>
     <input type="hidden" name="enabled" value={enabled?"on":""}/>
     <input type="hidden" name="fallbackMode" value={fallback}/>
     <div className="ssr-expanded-title">
@@ -303,22 +326,36 @@ export function InlineRuleEditor({set,products,metafields,categories,ruleCap,onC
         {selectionMode!=="ai"&&<ProductPicker selected={pinnedIds} onChange={setPinnedIds}
           products={products} label="recommended products"/>}
         <div className="ssr-field" style={{marginTop:12,marginBottom:9}}>
+          How should THEN groups select products?
+        </div>
+        <Toggle label="Candidate group behaviour" value={targetMode} onChange={next=>{
+          setTargetMode(next);
+          if(next==="allocate"&&selectionMode==="manual")setSelectionMode("hybrid");
+          if(next==="allocate")setTargetRules(current=>current.map(g=>({...g,maxItems:g.maxItems??1})));
+        }} options={[["filter","Match conditions together"],["allocate","Allocate products per group"]]}/>
+        <p>{targetMode==="allocate"
+          ?"Each THEN group finds its own products. Set how many each can contribute to this row, up to eight in the block."
+          :"Existing rules keep their ALL/ANY group filtering behaviour. Switch to Allocate for independent product groups."}</p>
+        <div className="ssr-field" style={{marginTop:12,marginBottom:9}}>
           Candidate matching conditions
         </div>
         <ConditionGroups side="then" groups={targetRules} onChange={setTargetRules}
           outer={targetLogic} setOuter={setTargetLogic} remaining={remaining}
-          metafields={metafields} categories={categories}/>
+          metafields={metafields} categories={categories}
+          allocate={targetMode==="allocate"} maxCapacity={groupCapacity}/>
         <p>When left empty, automatic matching uses catalogue relevance signals.</p>
       </section>
     </div>
     <div className="ssr-extra">
       <label className="ssr-field">{set.kind==="bundle"?"Max add-ons from this row":"Max products from this row"}
-        <select className="ssr-select" name="maxItems" value={maxItems}
+        <select className="ssr-select" value={effectiveMax}
+          disabled={targetMode==="allocate"}
           onChange={e=>setMaxItems(Number(e.target.value))}>
           {Array.from({length:set.kind==="bundle"?7:8},(_,i)=>i+1).map(n=>
             <option key={n} value={n}>{n} {n===1?"product":"products"}</option>)}
         </select>
-        <span className="ssr-caption">{set.kind==="bundle"?
+        <span className="ssr-caption">{targetMode==="allocate"?
+          "Calculated automatically from your THEN group allocations.":set.kind==="bundle"?
           "A bundle includes the main product: max 7 add-ons + main = 8.":
           "All rows together share one maximum of 8 on the storefront."}</span>
       </label>
@@ -336,9 +373,10 @@ export function InlineRuleEditor({set,products,metafields,categories,ruleCap,onC
         <span className="ssr-caption">Does not change your saved advanced exclusions.</span>
       </div>
     </div>
-    {(invalid||missingSource||missingOutput)&&
-      <p className="ssr-error" role="alert">{invalid?
-        "You've exceeded the number of conditions allowed on your plan.":
+    {(invalid||missingSource||missingOutput||overAllocated||missingAllocation)&&
+      <p className="ssr-error" role="alert">{overAllocated?"Group allocations total more than "+groupCapacity+" available slots.":
+        missingAllocation?"Add a THEN group and use Automatic or Hybrid matching.":
+        invalid?"You've exceeded the number of conditions allowed on your plan.":
         missingSource?"Select a valid IF trigger before saving.":
         "Choose at least one handpicked product."}</p>}
     {fetcher.data?.error&&<p className="ssr-error" role="alert">{fetcher.data.error}</p>}
@@ -350,7 +388,7 @@ export function InlineRuleEditor({set,products,metafields,categories,ruleCap,onC
       <div className="ssr-actions">
         <button type="button" className="ssr-btn" onClick={onClose}>Cancel</button>
         <button type="submit" className="ssr-btn ssr-btn-primary"
-          disabled={fetcher.state!=="idle"||invalid||missingSource||missingOutput||!name.trim()}>
+          disabled={fetcher.state!=="idle"||invalid||missingSource||missingOutput||overAllocated||missingAllocation||!name.trim()}>
           {fetcher.state!=="idle"?"Saving…":"Save rule"}
         </button>
       </div>
