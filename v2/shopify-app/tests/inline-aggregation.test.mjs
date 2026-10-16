@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { aggregateRuleSets } from "../app/services/set-matching.mjs";
-import { evaluateGroups, recommend } from "../app/services/engine.mjs";
+import { evaluateGroups, recommend, bundleTotals } from "../app/services/engine.mjs";
 
 const source={id:"source",title:"Winter Snowboard",category:"snowboards",productType:"snowboard",vendor:"Test",
   tags:["snow"],collections:[],metafields:{},available:true,published:true,priceCents:10000};
@@ -72,4 +72,14 @@ test("drafts don't contribute on storefront, but can be previewed",()=>{
   const preview=aggregateRuleSets({...defaultArgs,sets:[draft],previewSetId:draft.id,
     recommendForSet:()=>({items:[{product:all[0]}]})});
   assert.equal(preview.items.length,1);
+});
+
+test("single bundle row can contribute seven add-ons, with eight total products",()=>{
+  const result=recommend({sourceId:source.id,products:[source,...all],config:{
+    kind:"bundle",mode:"manual",pinnedIds:all.slice(0,7).map(p=>p.id),maxItems:7
+  }});
+  assert.equal(result.items.length,7);
+  const choice=[source,...result.items.map(item=>item.product)];
+  const totals=bundleTotals({items:choice,selectedIds:choice.map(p=>p.id)});
+  assert.equal(totals.numberOfItems,8);
 });
